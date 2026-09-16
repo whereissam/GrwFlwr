@@ -6,7 +6,7 @@
 # .csv is silently dropped from the bundle. JSONL keeps one row per line.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-dst="$root/federated/growflwr/dataset"
+dst="$root/federated/grwflwr/dataset"
 mkdir -p "$dst"
 
 python3 - "$root/data" "$dst" << 'PY'
@@ -23,5 +23,5 @@ for name in ["partitions", "regional_weather"]:
     written += 1
 
 (dst / "schema.json").write_text((src / "schema.json").read_text())
-print(f"synced {written} datasets + schema.json into federated/growflwr/dataset/")
+print(f"synced {written} datasets + schema.json into federated/grwflwr/dataset/")
 PY

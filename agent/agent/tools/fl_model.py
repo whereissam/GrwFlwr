@@ -4,7 +4,7 @@ Produced by `federated/` (FedAvg across four farms) and shipped inside the FAB:
 the AgentApp runs in a remote container with no route to the machine that
 trained it. Scoring happens in-process, so a farmer's readings never leave.
 
-The encoding here must match `federated/growflwr/data.py` exactly -- same
+The encoding here must match `federated/grwflwr/data.py` exactly -- same
 column order, vocabularies, normalization constants and interaction terms. All
 of that is read from the model JSON rather than duplicated as constants here,
 and the feature count is checked, so the two cannot drift apart silently.

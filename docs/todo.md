@@ -1,10 +1,10 @@
-# GrowFlwr — Build TODO
+# GrwFlwr — Build TODO
 
 **Federated irrigation advice without sharing farm data.**
 
 Farms in one water region each hold telemetry they will not publish. None has
 seen enough conditions alone to know when irrigation is genuinely needed.
-GrowFlwr trains one model across all of them without moving a row, then puts a
+GrwFlwr trains one model across all of them without moving a row, then puts a
 Flower Agent in front of it.
 
 Architecture: [`diagrams/architecture.svg`](diagrams/architecture.svg) ·
@@ -108,7 +108,7 @@ FEDERATED (FedAvg)               0.732                              41
 - [ ] `scenario="unusual"` (the searched disagreement case) was lost in the
       rewrite to three classes. The counterfactual still prints, but there is no
       curated case where the models disagree — worth restoring for the demo.
-- [ ] Merge `growflwr-merged` and `agent-julian`. Currently a clean fast-forward;
+- [ ] Merge `grwflwr-merged` and `agent-julian`. Currently a clean fast-forward;
       that stops being true the moment either side adds a commit.
 
 ## Known risks

@@ -150,8 +150,8 @@ cd federated
 uv run python -c "
 import sys; sys.path.insert(0,'.')
 import numpy as np
-from growflwr.data import farm_data, region_data, NUM_FARMS
-from growflwr.model import init_params, train, macro_f1
+from grwflwr.data import farm_data, region_data, NUM_FARMS
+from grwflwr.model import init_params, train, macro_f1
 xr, yr = region_data()
 tr = [farm_data(f)[:2] for f in range(NUM_FARMS)]
 def fedavg(s, rounds=10, ep=40, lr=0.3):

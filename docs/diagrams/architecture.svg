@@ -37,7 +37,7 @@
 <text x="473.4750000000001" y="533" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">Regional Authority</text>
 <rect x="39.99999999999994" y="831" width="795.7500000000001" height="268" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
 <rect x="39.99999999999994" y="831" width="795.7500000000001" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
-<text x="51.99999999999994" y="845" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">GrowFlwr AgentApp</text>
+<text x="51.99999999999994" y="845" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">GrwFlwr AgentApp</text>
 <rect x="855.7500000000002" y="831" width="283.35" height="424" rx="0" ry="0" fill="var(--_group-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
 <rect x="855.7500000000002" y="831" width="283.35" height="28" rx="0" ry="0" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
 <text x="867.7500000000002" y="845" dy="0.35em" font-size="12" font-weight="600" fill="var(--_text-sec)">Farmer</text>

@@ -32,7 +32,7 @@ app = ServerApp()
 # SuperLink is running, which is not this project -- a relative path silently
 # writes the model into some unrelated directory.
 MODEL_PATH = Path(
-    os.environ.get("GROWFLWR_MODEL_PATH", Path.home() / ".growflwr" / "global_model.json")
+    os.environ.get("GRWFLWR_MODEL_PATH", Path.home() / ".grwflwr" / "global_model.json")
 ).expanduser()
 
 
@@ -156,7 +156,7 @@ def main(grid: Grid, context: Context) -> None:
 
     width = 80
     print("\n" + "=" * width)
-    print("GrowFlwr - pooled held-out fields, all four farms")
+    print("GrwFlwr - pooled held-out fields, all four farms")
     print("=" * width)
     print(f"Test set: {len(y_region)} rows  "
           f"Low={counts[0]}  Medium={counts[1]}  High={counts[2]}")

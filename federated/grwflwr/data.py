@@ -44,7 +44,7 @@ def _resolve_data_dir() -> Path:
     package and `fab-include` ships them. The repo-root path is kept as a
     fallback so `python -c` against a checkout still works.
     """
-    override = os.environ.get("GROWFLWR_DATA_DIR")
+    override = os.environ.get("GRWFLWR_DATA_DIR")
     if override:
         return Path(override).expanduser()
 
@@ -216,6 +216,16 @@ def _load_partition(farm_id: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
 
 def farm_data(partition_id: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return (x_train, y_train, x_test, y_test) for one farm, split by season."""
+    if not 0 <= partition_id < NUM_FARMS:
+        # The simulation was told to spawn more SuperNodes than the dataset has
+        # partitions. FedAvg still completes using the valid clients, so this
+        # otherwise shows up only as a stack trace scrolling past mid-run.
+        raise ValueError(
+            f"partition-id {partition_id} has no data: this dataset has "
+            f"{NUM_FARMS} partitions ({', '.join(FARM_IDS)}). Set the simulation "
+            f"to {NUM_FARMS} SuperNodes:\n"
+            f"    flwr federation simulation-config --num-supernodes {NUM_FARMS}"
+        )
     x, y, years = _load_partition(FARM_IDS[partition_id])
     train = years != TEST_YEAR
     return x[train], y[train], x[~train], y[~train]

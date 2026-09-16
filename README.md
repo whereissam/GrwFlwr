@@ -1,4 +1,4 @@
-# GrowFlwr
+# GrwFlwr
 
 **Federated irrigation advice without sharing farm data.**
 
@@ -7,7 +7,7 @@ moisture, water drawn, yield. Individually, none of them has seen enough
 conditions to know when irrigating is actually safe. Pooling the data is the
 obvious fix and the one nobody will agree to.
 
-GrowFlwr trains one model across all of them without moving a single row, then
+GrwFlwr trains one model across all of them without moving a single row, then
 puts a Flower Agent in front of it so a farmer can ask a plain question and get
 a grounded answer.
 
@@ -73,7 +73,7 @@ an `agentapp` component and simulation is skipped for agent bundles.
 Or step by step:
 
 ```bash
-cd federated && uv run flwr run . local-sim --stream   # ~23s, 8 rounds
+cd federated && uv run flwr run . local-sim --federation-config 'num-supernodes=2' --stream   # ~23s, 8 rounds
 cd .. && ./scripts/sync-model.sh                       # artifacts into the FAB
 cd agent && uv run flwr login supergrid                # once
 uv run flwr run . supergrid --stream

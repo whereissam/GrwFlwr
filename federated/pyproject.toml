@@ -3,25 +3,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "growflwr"
+name = "grwflwr"
 version = "0.1.0"
-description = "Federated irrigation-safety model for GrowFlwr"
+description = "Federated irrigation-safety model for GrwFlwr"
 license = { file = "LICENSE" }
 requires-python = ">=3.11,<4.0"
 dependencies = ["flwr[simulation]>=1.35.0,<2.0", "numpy>=1.26,<3.0"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["growflwr"]
+packages = ["grwflwr"]
 
 [tool.flwr.app]
-publisher = "growflwr"
+publisher = "grwflwr"
 fab-format-version = 1
 flwr-version-target = "1.35.0"
-fab-include = ["growflwr/**/*.py", "growflwr/dataset/*", "LICENSE"]
+fab-include = ["grwflwr/**/*.py", "grwflwr/dataset/*", "LICENSE"]
 
 [tool.flwr.app.components]
-serverapp = "growflwr.server_app:app"
-clientapp = "growflwr.client_app:app"
+serverapp = "grwflwr.server_app:app"
+clientapp = "grwflwr.client_app:app"
 
 [tool.flwr.app.config]
 num-server-rounds = 30
@@ -45,7 +45,12 @@ learning-rate = 0.3
 #######################################################################
 
 # [tool.flwr.federations]
-# default = "local-sim"
-
-# [tool.flwr.federations.local-sim]
-# options.num-supernodes = 2
+# The federation block is deliberately absent. `flwr` migrates it into
+# ~/.flwr/config.toml on first run and then ignores this file, so a value here
+# silently goes stale. Pass it per-run instead:
+#
+#     uv run flwr run . local-sim --federation-config 'num-supernodes=2'
+#
+# It must equal the number of partitions in the dataset (currently 2). More
+# SuperNodes than partitions does not fail the run -- the extra clients raise
+# every round while FedAvg quietly completes on the rest.

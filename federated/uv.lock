@@ -537,7 +537,7 @@ wheels = [
 ]
 
 [[package]]
-name = "growflwr"
+name = "grwflwr"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

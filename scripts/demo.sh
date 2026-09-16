@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# GrowFlwr end-to-end demo: train federatively, then ask the agent.
+# GrwFlwr end-to-end demo: train federatively, then ask the agent.
 #
 #   ./scripts/demo.sh            train + ask every farm
 #   ./scripts/demo.sh --ask-only skip training, use the current model
@@ -22,7 +22,13 @@ rule() { printf '\n%s\n' "$(printf '=%.0s' {1..78})"; }
 
 if [ "$ask_only" = false ]; then
   rule; echo "1/3  Federated training - four farms, raw data stays local"; rule
-  (cd "$root/federated" && uv run flwr run . local-sim --stream)
+  # num-supernodes is pinned on the command line, not in pyproject.toml: the
+  # flwr config migration comments out [tool.flwr.federations] and copies the
+  # value into ~/.flwr/config.toml, where it then goes stale. Spawning more
+  # SuperNodes than the dataset has partitions does not fail the run -- FedAvg
+  # completes on the valid clients while the rest throw every round.
+  (cd "$root/federated" && uv run flwr run . local-sim \
+     --federation-config 'num-supernodes=2' --stream)
 
   rule; echo "2/3  Bundling the global model into the AgentApp"; rule
   "$root/scripts/sync-model.sh"
