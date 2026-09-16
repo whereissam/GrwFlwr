@@ -66,6 +66,30 @@ uv run flwr run . supergrid \
   --stream
 ```
 
+## Pump automation
+
+The agent decides whether to irrigate from the FL model's
+`recommended_irrigation_mm` and logs `PUMP: ON/OFF` (a demo stand-in — no
+real hardware is driven); the model's reply also states that pump status.
+
+To run this check automatically every day, register Flower's native
+recurring-run automation once with a dedicated `agent.action="schedule"`
+run (see `_setup_daily_automation` in `agent/agent_app.py`, which calls the
+`start_automation` connector directly rather than via the model, for the
+same reason described above):
+
+```shell
+uv run flwr run . supergrid \
+  --run-config 'agent.action="schedule" agent.schedule_hour=16 agent.timezone="Europe/Berlin"' \
+  --stream
+```
+
+This registers a run series that repeats daily at `agent.schedule_hour` in
+`agent.timezone`, each time re-running the normal irrigation check (weather +
+FL model + local data) with `agent.input="Should I irrigate today?"`. Manage
+or stop it from the SuperGrid federation's **Latest activity → Automations**
+tab (there's no CLI command for listing/stopping automations yet).
+
 ## Learn more
 
 See the [Flower Agent documentation](https://flower.ai/docs/agent/) for more
