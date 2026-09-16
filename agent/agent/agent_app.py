@@ -23,7 +23,7 @@ from .tools import (
     parse_weather_forecast,
 )
 
-MODEL = "openai/gpt-5.6-sol"
+MODEL = "flower-endeavor-v1.0"
 
 SYSTEM_PROMPT = """\
 You are an irrigation advisor for a smallholder farm. You are given the \
