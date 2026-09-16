@@ -16,7 +16,11 @@
     2025,
     2026
   ],
-  "n_farms_default": 10,
+  "n_farms_default": 2,
+  "client_files": [
+    "partition_1_farmer_1.csv",
+    "partition_2_farmer_2.csv"
+  ],
   "label_mapping": {
     "0": "Low",
     "1": "Medium",
@@ -109,6 +113,30 @@
       {
         "farm_offset": 2,
         "crops": [
+          "maize"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "pivot"
+        ]
+      },
+      {
+        "farm_offset": 3,
+        "crops": [
+          "sugar_beet"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "drip"
+        ]
+      },
+      {
+        "farm_offset": 4,
+        "crops": [
           "potato"
         ],
         "soils": [
@@ -119,7 +147,7 @@
         ]
       },
       {
-        "farm_offset": 3,
+        "farm_offset": 5,
         "crops": [
           "maize"
         ],
@@ -127,31 +155,7 @@
           "loamy_sand"
         ],
         "irrigation": [
-          "pivot"
-        ]
-      },
-      {
-        "farm_offset": 4,
-        "crops": [
-          "maize"
-        ],
-        "soils": [
-          "loam"
-        ],
-        "irrigation": [
           "hose_reel"
-        ]
-      },
-      {
-        "farm_offset": 5,
-        "crops": [
-          "sugar_beet"
-        ],
-        "soils": [
-          "loam"
-        ],
-        "irrigation": [
-          "drip"
         ]
       },
       {

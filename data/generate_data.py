@@ -16,7 +16,7 @@ from pathlib import Path
 SEASON_START_MD = (4, 15)
 SEASON_END_MD = (9, 30)
 DEFAULT_YEARS = (2025, 2026)
-DEFAULT_FARMS = 10
+DEFAULT_FARMS = 2
 
 CROPS = ("potato", "maize", "sugar_beet")
 SOILS = ("sand", "loamy_sand", "loam")
@@ -30,14 +30,22 @@ WATER_SOURCES = (
     "farm_reservoir",
 )
 
-# Crop/soil/system specialisation. Spec soils only: sand, loamy_sand, loam.
-# At least one farm never grows a crop that another farm grows.
+def client_id(index: int) -> str:
+    return f"farmer_{index}"
+
+
+def partition_filename(index: int) -> str:
+    return f"partition_{index}_farmer_{index}.csv"
+
+
+# First two profiles are the default pair (different crop and soil).
+# Spec soils only: sand, loamy_sand, loam.
 FARM_PROFILES = (
     {"crops": ("potato",), "soils": ("sand",), "irrigation": ("drip",)},
-    {"crops": ("potato",), "soils": ("sand",), "irrigation": ("hose_reel",)},
-    {"crops": ("maize",), "soils": ("loamy_sand",), "irrigation": ("pivot",)},
-    {"crops": ("maize",), "soils": ("loam",), "irrigation": ("hose_reel",)},
+    {"crops": ("maize",), "soils": ("loam",), "irrigation": ("pivot",)},
     {"crops": ("sugar_beet",), "soils": ("loam",), "irrigation": ("drip",)},
+    {"crops": ("potato",), "soils": ("sand",), "irrigation": ("hose_reel",)},
+    {"crops": ("maize",), "soils": ("loamy_sand",), "irrigation": ("hose_reel",)},
     {"crops": ("sugar_beet",), "soils": ("loam",), "irrigation": ("pivot",)},
     {"crops": ("potato", "maize"), "soils": ("sand", "loamy_sand"), "irrigation": ("drip", "pivot")},
     {"crops": ("maize", "sugar_beet"), "soils": ("loam",), "irrigation": ("hose_reel", "pivot")},
@@ -247,7 +255,7 @@ def planting_window(crop: str, year: int) -> tuple[date, date]:
 def build_fields(n_farms: int, rng: random.Random, missing_rate: float) -> list[FieldSpec]:
     fields: list[FieldSpec] = []
     for farm_i in range(1, n_farms + 1):
-        farm_id = f"farm_{farm_i}"
+        farm_id = client_id(farm_i)
         profile = FARM_PROFILES[(farm_i - 1) % len(FARM_PROFILES)]
         n_fields = rng.randint(3, 4)
         water_source = WATER_SOURCES[(farm_i - 1) % len(WATER_SOURCES)]
@@ -288,11 +296,11 @@ def farm_rain_series(
         profile = FARM_PROFILES[(i - 1) % len(FARM_PROFILES)]
         # Sand-specialist farms catch a bit less of the regional rain.
         if profile["soils"][0] == "sand":
-            factors[f"farm_{i}"] = rng.uniform(0.62, 0.92)
+            factors[client_id(i)] = rng.uniform(0.62, 0.92)
         elif profile["soils"][0] == "loam":
-            factors[f"farm_{i}"] = rng.uniform(0.95, 1.22)
+            factors[client_id(i)] = rng.uniform(0.95, 1.22)
         else:
-            factors[f"farm_{i}"] = rng.uniform(0.80, 1.10)
+            factors[client_id(i)] = rng.uniform(0.80, 1.10)
     out: dict[tuple[str, str], float] = {}
     for row in weather:
         for farm_id, factor in factors.items():
@@ -436,6 +444,7 @@ def schema_document(years: list[int], n_farms: int) -> dict:
         },
         "years": years,
         "n_farms_default": n_farms,
+        "client_files": [partition_filename(i) for i in range(1, n_farms + 1)],
         "label_mapping": {str(k): v for k, v in LABEL_MAPPING.items()},
         "allowed_values": {
             "crop_type": list(CROPS),
@@ -522,7 +531,7 @@ def validate(rows: list[dict], n_farms: int) -> None:
                     "never-irrigated days_since_last_irrigation must equal days_after_planting"
                 )
     farms = {row["farm_id"] for row in rows}
-    expected = {f"farm_{i}" for i in range(1, n_farms + 1)}
+    expected = {client_id(i) for i in range(1, n_farms + 1)}
     if farms != expected:
         raise SystemExit(f"farm ids {farms} != {expected}")
 
@@ -554,7 +563,7 @@ def parse_args() -> argparse.Namespace:
         "--out",
         type=Path,
         default=Path(__file__).resolve().parent,
-        help="Directory for farm_N.csv, schema.json, regional_weather.csv, centralized_baseline.csv",
+        help="Directory for partition_N_farmer_N.csv, schema.json, regional_weather.csv",
     )
     return parser.parse_args()
 
@@ -570,15 +579,16 @@ def main() -> None:
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
 
-    for old in out.glob("farm_*.csv"):
-        old.unlink()
+    for pattern in ("farm_*.csv", "partition_*_farmer_*.csv"):
+        for old in out.glob(pattern):
+            old.unlink()
 
     weather = regional_weather(years, rng)
     fields = build_fields(args.farms, rng, args.missing_rate)
     farm_rain = farm_rain_series(weather, args.farms, rng)
 
     all_rows: list[dict] = []
-    by_farm: dict[str, list[dict]] = {f"farm_{i}": [] for i in range(1, args.farms + 1)}
+    by_farm: dict[str, list[dict]] = {client_id(i): [] for i in range(1, args.farms + 1)}
     for spec in fields:
         rows = simulate(spec, weather, farm_rain, rng)
         all_rows.extend(rows)
@@ -588,8 +598,8 @@ def main() -> None:
 
     write_csv(out / "regional_weather.csv", weather, ["date", "et0_mm", "rain_mm"])
     for farm_id, farm_rows in by_farm.items():
-        index = farm_id.split("_", 1)[1]
-        write_csv(out / f"farm_{index}.csv", farm_rows, COLUMN_ORDER)
+        index = int(farm_id.split("_", 1)[1])
+        write_csv(out / partition_filename(index), farm_rows, COLUMN_ORDER)
     write_csv(out / "centralized_baseline.csv", all_rows, COLUMN_ORDER)
     (out / "schema.json").write_text(
         json.dumps(schema_document(years, args.farms), indent=2) + "\n"
