@@ -18,8 +18,7 @@
   ],
   "n_farms_default": 2,
   "client_files": [
-    "partition_1_farmer_1.csv",
-    "partition_2_farmer_2.csv"
+    "partitions.csv"
   ],
   "label_mapping": {
     "0": "Low",

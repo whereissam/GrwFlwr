@@ -24,9 +24,7 @@ Writes to `--out`:
 
 | Path | What it is |
 | --- | --- |
-| `partition_1_farmer_1.csv` | Flower client / partition 1 |
-| `partition_2_farmer_2.csv` | Flower client / partition 2 |
-| `centralized_baseline.csv` | Pooled table for a centralized baseline only |
+| `partitions.csv` | Both farmers in one file. Split on `farm_id`: `farmer_1` is partition 1, `farmer_2` is partition 2. |
 | `regional_weather.csv` | Shared regional `et0_mm` and `rain_mm` |
 | `schema.json` | Column list, `label_mapping`, partition profiles |
 

@@ -34,8 +34,7 @@ def client_id(index: int) -> str:
     return f"farmer_{index}"
 
 
-def partition_filename(index: int) -> str:
-    return f"partition_{index}_farmer_{index}.csv"
+COMBINED_FILENAME = "partitions.csv"
 
 
 # First two profiles are the default pair (different crop and soil).
@@ -444,7 +443,7 @@ def schema_document(years: list[int], n_farms: int) -> dict:
         },
         "years": years,
         "n_farms_default": n_farms,
-        "client_files": [partition_filename(i) for i in range(1, n_farms + 1)],
+        "client_files": [COMBINED_FILENAME],
         "label_mapping": {str(k): v for k, v in LABEL_MAPPING.items()},
         "allowed_values": {
             "crop_type": list(CROPS),
@@ -563,7 +562,7 @@ def parse_args() -> argparse.Namespace:
         "--out",
         type=Path,
         default=Path(__file__).resolve().parent,
-        help="Directory for partition_N_farmer_N.csv, schema.json, regional_weather.csv",
+        help="Directory for partitions.csv, schema.json, regional_weather.csv",
     )
     return parser.parse_args()
 
@@ -579,9 +578,12 @@ def main() -> None:
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
 
-    for pattern in ("farm_*.csv", "partition_*_farmer_*.csv"):
+    for pattern in ("farm_*.csv", "partition_*_farmer_*.csv", "centralized_baseline.csv"):
         for old in out.glob(pattern):
             old.unlink()
+    combined = out / COMBINED_FILENAME
+    if combined.exists():
+        combined.unlink()
 
     weather = regional_weather(years, rng)
     fields = build_fields(args.farms, rng, args.missing_rate)
@@ -597,10 +599,7 @@ def main() -> None:
     validate(all_rows, args.farms)
 
     write_csv(out / "regional_weather.csv", weather, ["date", "et0_mm", "rain_mm"])
-    for farm_id, farm_rows in by_farm.items():
-        index = int(farm_id.split("_", 1)[1])
-        write_csv(out / partition_filename(index), farm_rows, COLUMN_ORDER)
-    write_csv(out / "centralized_baseline.csv", all_rows, COLUMN_ORDER)
+    write_csv(out / COMBINED_FILENAME, all_rows, COLUMN_ORDER)
     (out / "schema.json").write_text(
         json.dumps(schema_document(years, args.farms), indent=2) + "\n"
     )
@@ -628,7 +627,7 @@ def main() -> None:
         "crops_by_farm": crops_by_farm,
         "high_rows_by_farm": high_by_farm,
         "seed": args.seed,
-        "out": str(out),
+        "out_file": COMBINED_FILENAME,
     }
     print(json.dumps(summary, indent=2))
 
