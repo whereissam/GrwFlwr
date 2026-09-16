@@ -1,11 +1,25 @@
 {
-  "dataset": "onfarm_irrigation_need_v2",
+  "dataset": "onfarm_irrigation_need_v3",
   "spec": "DATA_SPEC.md",
   "grain": "one row = one field on one date (morning observation)",
-  "season": {
-    "start": "2026-04-15",
-    "end": "2026-09-30"
+  "season_window": {
+    "start_md": [
+      4,
+      15
+    ],
+    "end_md": [
+      9,
+      30
+    ]
   },
+  "years": [
+    2025,
+    2026
+  ],
+  "n_farms_default": 2,
+  "client_files": [
+    "partitions.csv"
+  ],
   "label_mapping": {
     "0": "Low",
     "1": "Medium",
@@ -78,7 +92,140 @@
       0,
       100
     ],
-    "source": "noisy sensor"
+    "source": "noisy sensor",
+    "missing": "empty cell (gap or dropout)"
+  },
+  "partition_design": {
+    "profiles": [
+      {
+        "farm_offset": 1,
+        "crops": [
+          "potato"
+        ],
+        "soils": [
+          "sand"
+        ],
+        "irrigation": [
+          "drip"
+        ]
+      },
+      {
+        "farm_offset": 2,
+        "crops": [
+          "maize"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "pivot"
+        ]
+      },
+      {
+        "farm_offset": 3,
+        "crops": [
+          "sugar_beet"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "drip"
+        ]
+      },
+      {
+        "farm_offset": 4,
+        "crops": [
+          "potato"
+        ],
+        "soils": [
+          "sand"
+        ],
+        "irrigation": [
+          "hose_reel"
+        ]
+      },
+      {
+        "farm_offset": 5,
+        "crops": [
+          "maize"
+        ],
+        "soils": [
+          "loamy_sand"
+        ],
+        "irrigation": [
+          "hose_reel"
+        ]
+      },
+      {
+        "farm_offset": 6,
+        "crops": [
+          "sugar_beet"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "pivot"
+        ]
+      },
+      {
+        "farm_offset": 7,
+        "crops": [
+          "potato",
+          "maize"
+        ],
+        "soils": [
+          "sand",
+          "loamy_sand"
+        ],
+        "irrigation": [
+          "drip",
+          "pivot"
+        ]
+      },
+      {
+        "farm_offset": 8,
+        "crops": [
+          "maize",
+          "sugar_beet"
+        ],
+        "soils": [
+          "loam"
+        ],
+        "irrigation": [
+          "hose_reel",
+          "pivot"
+        ]
+      },
+      {
+        "farm_offset": 9,
+        "crops": [
+          "potato",
+          "sugar_beet"
+        ],
+        "soils": [
+          "loamy_sand"
+        ],
+        "irrigation": [
+          "drip",
+          "hose_reel"
+        ]
+      },
+      {
+        "farm_offset": 10,
+        "crops": [
+          "potato"
+        ],
+        "soils": [
+          "sand",
+          "loamy_sand"
+        ],
+        "irrigation": [
+          "pivot"
+        ]
+      }
+    ]
   },
   "label": {
     "column": "irrigation_need",
