@@ -1,0 +1,1 @@
+https://discuss.flower.ai/t/collaborative-agent-hackathon-berlin-germany-2026/1273
