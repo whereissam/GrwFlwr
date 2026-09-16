@@ -96,18 +96,25 @@ def _setup_daily_automation(agent: AgentSession, context: Context) -> None:
         minute=0,
         tz=context.run_config.get("agent.timezone", "Europe/Berlin"),
     )
+    arguments = {
+        "input": "Should I water today?",
+        "start_at": start_at,
+        "fixed_interval": 86400,
+    }
+
+    # Bound the schedule when asked. Without max_runs the connector registers an
+    # open-ended daily job, and there is no CLI to cancel one -- which makes it
+    # an awkward thing to try out. Set agent.schedule_max_runs=2 to test.
+    max_runs = context.run_config.get("agent.schedule_max_runs", 0)
+    if int(max_runs) > 0:
+        arguments["max_runs"] = int(max_runs)
+
     result = agent.connectors.call(
-        {
-            "name": "start_automation",
-            "call_id": "daily-irrigation-schedule",
-            "arguments": {
-                "input": "Should I water today?",
-                "start_at": start_at,
-                "fixed_interval": 86400,
-            },
-        }
+        {"name": "start_automation", "call_id": "daily-watering-schedule",
+         "arguments": arguments}
     )
-    print(f"Daily watering check scheduled starting {start_at}: {result}")
+    bound = f"{arguments['max_runs']} runs" if "max_runs" in arguments else "open-ended"
+    print(f"Daily watering check scheduled from {start_at} ({bound}): {result}")
 
 
 def _maybe_schedule_from_question(

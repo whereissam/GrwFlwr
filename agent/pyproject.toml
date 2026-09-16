@@ -30,6 +30,8 @@ field_id = ""
 action = ""
 schedule_hour = 16
 timezone = "Europe/Berlin"
+# 0 = open-ended. Set to a small number when testing the scheduler.
+schedule_max_runs = 0
 
 [tool.flwr.app.components]
 agentapp = "agent.agent_app:app"
