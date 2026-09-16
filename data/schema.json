@@ -1,0 +1,198 @@
+{
+  "dataset": "onfarm_irrigation_need_v2",
+  "spec": "DATA_SPEC.md",
+  "grain": "one row = one field on one date (morning observation)",
+  "season": {
+    "start": "2026-04-15",
+    "end": "2026-09-30"
+  },
+  "label_mapping": {
+    "0": "Low",
+    "1": "Medium",
+    "2": "High"
+  },
+  "allowed_values": {
+    "crop_type": [
+      "potato",
+      "maize",
+      "sugar_beet"
+    ],
+    "soil_type": [
+      "sand",
+      "loamy_sand",
+      "loam"
+    ],
+    "irrigation_type": [
+      "hose_reel",
+      "pivot",
+      "drip"
+    ],
+    "growth_stage": [
+      "initial",
+      "development",
+      "sensitive",
+      "late"
+    ],
+    "crop_variety_maturity": [
+      "early",
+      "medium",
+      "late"
+    ]
+  },
+  "agent_only_columns": [
+    "water_source",
+    "field_area_ha"
+  ],
+  "feature_columns": [
+    "soil_moisture_pct_nfk",
+    "growth_stage",
+    "crop_type",
+    "days_since_last_irrigation",
+    "previous_irrigation_mm",
+    "onfarm_rain_gauge_mm",
+    "soil_type",
+    "crop_variety_maturity",
+    "days_after_planting",
+    "irrigation_type"
+  ],
+  "columns": [
+    "farm_id",
+    "field_id",
+    "date",
+    "soil_moisture_pct_nfk",
+    "growth_stage",
+    "crop_type",
+    "days_since_last_irrigation",
+    "previous_irrigation_mm",
+    "onfarm_rain_gauge_mm",
+    "soil_type",
+    "crop_variety_maturity",
+    "days_after_planting",
+    "irrigation_type",
+    "water_source",
+    "field_area_ha",
+    "irrigation_need"
+  ],
+  "soil_moisture_pct_nfk": {
+    "clip": [
+      0,
+      100
+    ],
+    "source": "noisy sensor"
+  },
+  "label": {
+    "column": "irrigation_need",
+    "computed_from": "true_moisture_pct_nfk",
+    "thresholds": {
+      "potato": {
+        "initial": [
+          50,
+          35
+        ],
+        "development": [
+          55,
+          40
+        ],
+        "sensitive": [
+          65,
+          50
+        ],
+        "late": [
+          45,
+          30
+        ]
+      },
+      "maize": {
+        "initial": [
+          40,
+          25
+        ],
+        "development": [
+          50,
+          35
+        ],
+        "sensitive": [
+          60,
+          45
+        ],
+        "late": [
+          40,
+          25
+        ]
+      },
+      "sugar_beet": {
+        "initial": [
+          45,
+          30
+        ],
+        "development": [
+          50,
+          35
+        ],
+        "sensitive": [
+          55,
+          40
+        ],
+        "late": [
+          40,
+          25
+        ]
+      }
+    },
+    "potato_maturity_delta": {
+      "early": 5,
+      "medium": 0,
+      "late": -5
+    }
+  },
+  "kc": {
+    "potato": {
+      "initial": 0.5,
+      "development": 0.82,
+      "sensitive": 1.15,
+      "late": 0.75
+    },
+    "maize": {
+      "initial": 0.3,
+      "development": 0.75,
+      "sensitive": 1.2,
+      "late": 0.6
+    },
+    "sugar_beet": {
+      "initial": 0.35,
+      "development": 0.78,
+      "sensitive": 1.2,
+      "late": 0.7
+    }
+  },
+  "stage_lengths_medium": {
+    "potato": [
+      25,
+      30,
+      45,
+      30
+    ],
+    "maize": [
+      30,
+      40,
+      50,
+      30
+    ],
+    "sugar_beet": [
+      25,
+      35,
+      50,
+      50
+    ]
+  },
+  "maturity_length_scale": {
+    "early": 0.85,
+    "medium": 1.0,
+    "late": 1.15
+  },
+  "taw_mm": {
+    "sand": 70.0,
+    "loamy_sand": 100.0,
+    "loam": 140.0
+  }
+}
