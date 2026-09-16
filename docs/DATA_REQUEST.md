@@ -2,11 +2,15 @@
 
 For whoever is extending `data/generate_data.py`.
 
-**Short version: more days of the same data will not help. More farms, more
-High-need events, and more difference between farms will.**
+**Most of the previous round of asks landed.** The farms specialise, there are
+two seasons, High-need days come from drought rather than moved thresholds, and
+sensors now drop out and stick. All of that made the project's central claim
+measurable. Thank you.
 
-Everything below is measured against the current dataset, not guessed. The
-commands to reproduce each number are at the bottom.
+**The one remaining ask is farm count: 2 → 8–12.**
+
+Everything below is measured against the current dataset. Reproduction commands
+are at the bottom.
 
 ---
 
@@ -14,108 +18,83 @@ commands to reproduce each number are at the bottom.
 
 | | value |
 |---|---|
-| Farms (Flower clients) | 4 |
-| Rows | 2,792 across 17 fields, one season |
-| Label balance | 75% Low, 21% Medium, **2% High** |
-| High rows per farm | 7–15 |
-| Federated macro-F1 | 0.732 |
-| Federated High recall | 77% — but that is **10 of 13** test rows |
-
-The model is multinomial logistic regression with inverse-frequency class
-weights and moisture×crop / moisture×stage interaction terms.
+| Farms (Flower clients) | **2** — farmer_1 potato/sand, farmer_2 maize/loam |
+| Rows | 1,946 across 6 fields, seasons 2025 + 2026 |
+| Split | train 2025 (973 rows), test 2026 (973 rows) |
+| Test label balance | Low 645 · Medium 284 · **High 44** |
+| Always-predict-Low accuracy | 66.3% — which is why we report macro-F1 |
+| Federated macro-F1 | **0.736** (farmer_1 alone 0.596, farmer_2 alone 0.666) |
+| Federated High recall | 68% — 30 of 44 |
 
 ---
 
-## Three measurements that shape the ask
+## What the last round fixed
 
-### 1. The learning curve is flat — more days of the same data do nothing
-
-Training on a random fraction of each farm's rows:
-
-```
- 25% of rows (High=10): macro-F1 = 0.709
- 50% of rows (High=22): macro-F1 = 0.738
- 75% of rows (High=33): macro-F1 = 0.706
-100% of rows (High=41): macro-F1 = 0.704
-```
-
-A quarter of the data performs the same as all of it. Another full season of the
-same shape would change nothing.
-
-### 2. More farms does help
-
-Holding each farm's data constant and varying how many farms take part:
+**Specialisation made the argument provable.** This is the single most useful
+change. Because farmer_1 has only ever grown potato, we can measure what a solo
+model does on ground it has never farmed:
 
 ```
-2 farms: macro-F1 = 0.644
-3 farms: macro-F1 = 0.653
-4 farms: macro-F1 = 0.704
+Scored on farmer_2's maize fields (2026, 467 rows):
+  farmer_1 alone, never seen maize   macro-F1 0.480
+  federated                          macro-F1 0.664   (+38%)
+  farmer_2's own model               macro-F1 0.678
 ```
 
-This is the only lever that moved the number in the direction we want.
+That is now the centre of the pitch. With the old four-farm data — where every
+farm grew every crop — the best we could show was a marginal gain, and one farm
+was actually *worse off* for joining.
 
-### 3. The current bottleneck is model capacity, not data volume
+**Two seasons gave an honest split.** Train 2025, test 2026: "predict a year you
+have not seen." The previous single-season data forced a field-level holdout
+that left only 13 High rows in the test set; there are now 44.
 
-Federated training macro-F1 is 0.726; test is 0.704. Almost no gap, so the model
-is **underfitting** rather than running out of examples.
-
-A useful side effect worth knowing: pooling every row into one centralized model
-scores **0.680**, which is *lower* than the federated 0.704. Per-client class
-weighting balances the rare High class better than a single pooled fit does. So
-federating currently costs nothing against centralizing — which is the strongest
-claim the project has, and it came from the data, not from tuning.
+**Sensor dropout is handled.** ~2% of `soil_moisture_pct_nfk` cells are empty.
+They impute to the regional mean, which is zero in standardized space, so the
+feature stops contributing rather than the row being dropped.
 
 ---
 
-## What to change, in order of value
+## The remaining ask
 
-### ① More farms: 4 → 8–12
+### ① More farms: 2 → 8–12
 
-The one change with direct evidence behind it. Four clients is very few for
-FedAvg and the averaging is noisy. Same total row count spread over more farms
-would be better than the same farms getting more rows.
+Two clients is a very small federation and the average is correspondingly noisy.
+On the previous four-farm dataset, farm count was the only lever that measurably
+moved the result:
 
-### ② More High-need events
+```
+2 farms: macro-F1 0.644
+3 farms: macro-F1 0.653
+4 farms: macro-F1 0.704
+```
 
-41 High rows in training and 13 in test means every High metric is ±8% noise —
-"77% recall" is literally 10 correct out of 13. Any conclusion about the class
-the whole project is built around currently rests on 13 observations.
+**Caveat on that evidence:** those numbers are from the *old* dataset and cannot
+be re-measured now, because there are only two partitions to subset. Treat it as
+a strong prior, not a current measurement.
 
-**Careful here:** if this is done by lowering the thresholds in `DATA_SPEC.md`,
-it breaks the spec *and* makes the new data incompatible with the old. Prefer
-generating more drought periods — longer dry spells, higher ET₀ runs — so High
-arises from the weather rather than from moving the goalposts. Worth agreeing
-before you start.
+`generate_data.py --farms 8` already supports this, and `schema.json`'s
+`partition_design` has profiles defined out to at least five farms. Suggested
+shape, keeping specialisation intact:
 
-### ③ Make the farms genuinely different — the weakest part today
+- 8–12 farms, each still committed to one crop and one soil
+- at least two farms sharing a crop, so we can separate "learned the crop" from
+  "learned that farm"
+- a deliberately small farm — one or two fields — to show federation rescuing a
+  participant who could never train alone
 
-Right now **all four farms grow all three crops**. That makes the partitions
-nearly IID, which quietly undercuts the entire premise: if every farm sees
-everything, there is much less to gain from federating.
+### ② Slightly more High-need days, if it is cheap
 
-What would help:
+69 across both farms and both seasons, 44 of them in the test year. Workable,
+but High recall still moves ~2 percentage points per row. Not urgent, and **not
+worth touching the thresholds in `DATA_SPEC.md` for** — more drought periods, as
+you did last time, is the right mechanism.
 
-- each farm specialises — one mostly potato on sand, another mostly sugar beet
-  on clay
-- **at least one farm that has never seen a crop another farm grows**
-- soil type correlated with farm rather than mixed evenly across all of them
+### ③ Nothing else
 
-This is the difference between "federation gives +0.03 macro-F1" and "farm_3
-literally cannot advise on maize alone".
-
-### ④ A second and third season
-
-One season means no year-to-year drift. Multiple seasons would let us show the
-case that actually sells this: *a model trained alone on last year fails when
-this year is drier, and the federated one does not.*
-
-### ⑤ Sensor noise, gaps and failures
-
-The data is clean in a way real telemetry never is. No missing readings, no
-stuck sensors, no calibration drift. Two reasons to add them:
-
-- the agent currently crashes on a missing field rather than degrading
-- "we handle broken sensors" is a credible thing to show a judge
+A third season, more rows per farm, or more fields per farm would not help. The
+model saturates well below the data we already have: the train/test macro-F1 gap
+is 0.775 / 0.736, so it is underfitting, not short of examples.
 
 ---
 
@@ -124,20 +103,25 @@ stuck sensors, no calibration drift. Two reasons to add them:
 Per `DATA_SPEC.md`: do not rename columns, and do not alter the numeric
 thresholds, Kc values, stage lengths, soil TAW, or maturity modifiers.
 
-Items ①, ③, ④ and ⑤ need **none** of those changed — they are parameters of the
-generator (how many farms, which crops each one grows, which years, what noise),
-not of the labelling rule. Only ② risks touching the spec, which is why it needs
-a conversation first.
+Ask ① needs none of that — it is the `--farms` flag plus partition profiles.
+
+## One thing that would break us
+
+The column set and `schema.json`'s `allowed_values` are baked into the model's
+feature encoding, and the encoder is checked against the model's own feature
+count at inference. **Adding a new crop or soil type to `allowed_values` changes
+the feature vector length and invalidates every trained model.** That is fine —
+it just means a retrain plus `scripts/sync-model.sh`. Worth a heads-up rather
+than a surprise.
 
 ---
 
 ## A caveat that belongs in the pitch
 
-This dataset is **generated, not measured**. Every accuracy figure here
-describes how well a model recovers `generate_data.py`'s rules — not how well it
-would advise a real farmer. The agronomic structure is plausible, but real sensor
-noise, failure modes and regional drift are absent, so error on real data would
-very likely be larger. Say this on stage before a judge asks.
+This dataset is **generated, not measured**. Every accuracy figure describes how
+well a model recovers `generate_data.py`'s rules — not how it would advise a
+real farmer. The agronomic structure is plausible, but real-world error would
+very likely be larger. We say this on stage before a judge asks.
 
 ---
 
@@ -146,24 +130,21 @@ very likely be larger. Say this on stage before a judge asks.
 ```bash
 cd federated
 
-# learning curve and farm-count sweep
-uv run python -c "
-import sys; sys.path.insert(0,'.')
-import numpy as np
-from grwflwr.data import farm_data, region_data, NUM_FARMS
-from grwflwr.model import init_params, train, macro_f1
-xr, yr = region_data()
-tr = [farm_data(f)[:2] for f in range(NUM_FARMS)]
-def fedavg(s, rounds=10, ep=40, lr=0.3):
-    p = init_params(); ns=[len(x) for x,_ in s]
-    for _ in range(rounds):
-        o=[train(p,x,y,ep,lr)[0] for x,y in s]
-        p=[sum(a[k]*n for a,n in zip(o,ns))/sum(ns) for k in (0,1)]
-    return p
-for k in (2,3,4):
-    print(k, 'farms:', round(macro_f1(fedavg(tr[:k]), xr, yr), 3))
-"
+# headline table, cross-crop figures, privacy audit
+uv run flwr run . local-sim --federation-config 'num-supernodes=2' --stream
 
-# train-vs-test gap (underfitting check)
-uv run flwr run . local-sim --stream
+# the cross-crop measurement on its own
+uv run python -c "
+import sys, json; sys.path.insert(0,'.')
+import numpy as np
+from grwflwr.data import farm_data
+from grwflwr.model import macro_f1
+g = json.load(open('$HOME/.grwflwr/global_model.json'))
+s = json.load(open('$HOME/.grwflwr/solo_models.json'))
+fed = [np.array(g['weights']), np.array(g['bias'])]
+solo0 = [np.array(s['models']['0']['weights']), np.array(s['models']['0']['bias'])]
+_, _, xm, ym = farm_data(1)
+print('farmer_1 alone on maize:', round(macro_f1(solo0, xm, ym), 3))
+print('federated on maize     :', round(macro_f1(fed, xm, ym), 3))
+"
 ```
