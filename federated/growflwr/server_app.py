@@ -20,8 +20,9 @@ from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
 
-from .data import (CATEGORICAL, CLASS_NAMES, FEATURE_NAMES, FEATURE_STATS, NUMERIC,
-                   NUM_CLASSES, NUM_FARMS, farm_data, farm_name, region_data)
+from .data import (AGENT_ONLY, CATEGORICAL, CLASS_NAMES, FEATURE_NAMES, FEATURE_STATS,
+                   NUMERIC, NUM_CLASSES, NUM_FARMS, farm_data, farm_name, latest_rows,
+                   region_data)
 from .model import (accuracy, init_params, macro_f1, per_class_recall, predict_proba,
                     train)
 
@@ -74,6 +75,30 @@ def _save_solo(solos, scores, path_name="solo_models.json") -> Path:
             for fid, (params, score) in enumerate(zip(solos, scores))
         },
     }, indent=2))
+    return path
+
+
+def _save_conditions() -> Path:
+    """Write each farm's current field state for the AgentApp to answer about."""
+    out = {}
+    for fid in range(NUM_FARMS):
+        fields = []
+        for row in latest_rows(fid):
+            entry = {k: row[k] for k in ("field_id", "date", "growth_stage",
+                                         "soil_moisture_pct_nfk",
+                                         "days_since_last_irrigation",
+                                         "previous_irrigation_mm",
+                                         "onfarm_rain_gauge_mm", "soil_type",
+                                         "crop_variety_maturity",
+                                         "days_after_planting")}
+            entry.update({k: row[k] for k in AGENT_ONLY})
+            entry["recorded_irrigation_need"] = int(row["irrigation_need"])
+            fields.append(entry)
+        out[farm_name(fid)] = {"name": farm_name(fid), "fields": fields}
+
+    path = MODEL_PATH.parent / "current_conditions.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(out, indent=2))
     return path
 
 
@@ -172,6 +197,7 @@ def main(grid: Grid, context: Context) -> None:
     print(f"\nPer farm per round, {payload} bytes of weights crossed the wire.")
     print(f"{rows} rows of farm telemetry stayed on the farms. Zero were transmitted.")
 
+    _save_conditions()
     _save_solo(solos, solo_f1)
     path = _save(fed, {
         "region_macro_f1": fed_f1,

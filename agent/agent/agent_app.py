@@ -1,13 +1,13 @@
 """GrowFlwr: a Flower AgentApp that advises farmers on irrigation decisions.
 
 Combines a live weather forecast, the team's federated-learning irrigation
-model, and locally recorded farm data, then lets the model explain the result.
+model, and locally recorded field data, then lets the model explain the result.
 
 Two things are deliberate. Context is gathered up front rather than through
 model-driven tool calls: the lookups are deterministic, and streaming tool-call
 events currently crash the Flower runtime's event handling. And every number in
-the answer is computed here before the model is called -- the model's job is to
-explain figures, not to produce them.
+the answer is computed before the model is called -- the model explains figures,
+it does not produce them.
 """
 
 import json
@@ -18,51 +18,58 @@ from flwr.app import Context
 from openai import OpenAI
 
 from .tools import (
-    ModelUnavailable,
-    build_model_readings,
     build_weather_forecast_url,
     compare_against_solo,
+    driest_field,
     get_local_farm_data,
     parse_weather_forecast,
-    predict_irrigation_safety,
-    recommendation,
-    water_budget,
+    predict_irrigation_need,
+    water_plan,
+    weather_features,
 )
 
 MODEL = "openai/gpt-5.6-sol"
 
+# Each farm's approximate location, for the weather lookup. The dataset carries
+# no coordinates; these place the region on the Canal d'Urgell, Lleida.
+FARM_LOCATION = {
+    "farm_1": (41.62, 0.62),
+    "farm_2": (41.60, 0.70),
+    "farm_3": (41.47, 0.86),
+    "farm_4": (41.41, 0.95),
+}
+
 SYSTEM_PROMPT = """\
 You are GrowFlwr, an irrigation advisor for farms sharing one water region.
 
-You are given a DATA block: the farm's own sensor readings, a live weather
-forecast, a safety prediction from a model trained federatively across every
-farm in the region, and a water budget. Those numbers are already computed and
-are the only quantitative facts you may state.
+You are given a DATA block: one field's latest sensor readings, a weather
+forecast, a Low/Medium/High need classification from a model trained
+federatively across every farm in the region, and a water plan. Those numbers
+are already computed and are the only quantitative facts you may state.
 
 Rules:
-- Lead with `recommendation.action` and the confidence, in one sentence a busy
-  farmer can act on. `recommendation` already reconciles "is it safe" with "is it
-  needed" -- never advise irrigating when it says there is no need, even if the
-  safety probability is above 50%.
-- Justify it from the drivers given, naming the actual readings.
-- State the water budget in litres per hectare.
+- Lead with the need class and what to do, in one sentence a busy farmer can act
+  on. Give the volume in cubic metres, mentioning litres only if it helps.
+- Justify it from the readings given, naming actual values.
 - Use the pre-formatted percentage strings exactly as given.
-- If a data source contains an "error" field, or the weather source says values
-  are stored rather than live, say so plainly instead of implying it was fresh.
+- The water plan is an agronomic rule, not a model prediction. Do not describe
+  the volume as something the model predicted.
+- If `weather_source` says the forecast was unavailable, say so plainly rather
+  than implying the numbers are fresh.
 - If the models disagree, say what this farm's own model would have advised and
   why the federated one is more trustworthy here: it learned from conditions
   this farm rarely sees. If they agree, do not mention the comparison.
-- Never invent a reading or a forecast. Five sentences at most, no bullet lists.
+- Never invent a reading. Five sentences at most, no bullet lists.
 """
 
 app = AgentApp()
 
 
 def _safe_call(label: str, func) -> dict:
-    """Run a data lookup and never let it take down the whole run."""
+    """Run a lookup and never let it take down the whole run."""
     try:
         return func()
-    except Exception as exc:  # noqa: BLE001 - degrade gracefully, don't crash the run
+    except Exception as exc:  # noqa: BLE001 - degrade gracefully, don't crash
         print(f"{label} lookup failed: {exc!r}")
         return {"error": f"{label} unavailable: {exc}"}
 
@@ -81,61 +88,56 @@ def _web_fetch(agent: AgentSession, call_id: str, url: str) -> str:
 
 @app.main()
 def main(agent: AgentSession, context: Context) -> None:
-    """Answer one irrigation question for one farm."""
+    """Answer one irrigation question for one field."""
     question = context.run_config.get("agent.input")
     if not isinstance(question, str) or not question.strip():
         raise ValueError("agent.input must be a non-empty string")
-    farm_id = str(context.run_config.get("agent.farm_id", "farm-001"))
-    scenario = str(context.run_config.get("agent.scenario", "today"))
 
-    farm = get_local_farm_data(farm_id)
-    if "error" in farm:
-        # A farm we have no data for is reported as such. It is never worth
-        # letting the model guess at a soil reading.
-        print(f"Cannot answer: {farm['error']}")
-        raise ValueError(farm["error"])
+    farm_id = str(context.run_config.get("agent.farm_id", "farm_1"))
+    field_id = str(context.run_config.get("agent.field_id", "")).strip()
 
-    if scenario == "unusual":
-        # A real regional condition this farm's own model gets wrong, found in
-        # held-out data during training rather than authored for the demo.
-        unusual = farm.get("unusual_conditions")
-        if not unusual:
-            raise ValueError(f"No unusual-conditions case recorded for {farm_id}.")
-        readings, weather_source = unusual["readings"], "recorded scenario"
-        weather = {"note": "scenario uses recorded conditions, not a live forecast"}
-        known_answer = unusual["ground_truth"]
-    else:
-        weather = _safe_call(
-            "weather",
-            lambda: parse_weather_forecast(
-                _web_fetch(agent, "weather-fetch",
-                           build_weather_forecast_url(farm["latitude"], farm["longitude"]))
-            ),
-        )
-        readings, weather_source = build_model_readings(farm, weather)
-        known_answer = None
+    # No field named: answer about the driest one, which is what a farmer
+    # walking the property would ask about first.
+    located = (get_local_farm_data(farm_id, field_id) if field_id
+               else driest_field(farm_id))
+    if "error" in located:
+        print(f"Cannot answer: {located['error']}")
+        raise ValueError(located["error"])
+    field = located["field"]
 
-    prediction = _safe_call("FL model", lambda: predict_irrigation_safety(readings))
-    counterfactual = _safe_call("solo comparison", lambda: compare_against_solo(farm_id, readings))
-    budget = _safe_call("water budget", lambda: water_budget(readings))
-    advice = recommendation(prediction, budget)
+    lat, lon = FARM_LOCATION.get(farm_id, (41.62, 0.62))
+    forecast = _safe_call(
+        "weather",
+        lambda: parse_weather_forecast(
+            _web_fetch(agent, "weather-fetch", build_weather_forecast_url(lat, lon))
+        ),
+    )
+    weather, weather_source = weather_features(
+        forecast if "error" not in forecast else {}, field
+    )
 
-    _print_header(farm, scenario, weather_source, counterfactual, known_answer,
-                  question, advice)
+    prediction = _safe_call("FL model", lambda: predict_irrigation_need(field, weather))
+    counterfactual = _safe_call(
+        "solo comparison", lambda: compare_against_solo(farm_id, field, weather)
+    )
+    plan = _safe_call(
+        "water plan",
+        lambda: water_plan(field, weather, prediction.get("need_class", 0)),
+    )
+
+    _print_header(farm_id, field, weather_source, prediction, counterfactual, plan,
+                  question)
 
     data = {
-        "farm": {k: farm[k] for k in ("name", "crop", "soil_type", "irrigation_system")},
-        "scenario": scenario,
-        "weather_forecast": weather,
+        "farm_id": farm_id,
+        "field": field,
+        "weather_forecast": forecast,
         "weather_source": weather_source,
-        "model_readings": readings,
+        "weather_used_by_model": weather,
         "fl_model_prediction": prediction,
         "counterfactual": counterfactual,
-        "water_budget": budget,
-        "recommendation": advice,
+        "water_plan": plan,
     }
-    if known_answer:
-        data["known_correct_answer"] = known_answer
 
     client = OpenAI(
         base_url=os.environ["FLWR_RUNTIME_BASE_URL"],
@@ -163,18 +165,28 @@ def main(agent: AgentSession, context: Context) -> None:
     print("".join(output_text))
 
 
-def _print_header(farm, scenario, weather_source, counterfactual, known_answer,
-                  question, advice=None):
+def _print_header(farm_id, field, weather_source, prediction, counterfactual, plan,
+                  question):
     """Show the decision both ways before the model speaks, for the operator."""
-    print(f"--- {farm['name']}  [{scenario}] ---")
+    print(f"--- {farm_id} / {field['field_id']} "
+          f"({field['crop_type']}, {field['growth_stage']}) ---")
+    print(f"soil moisture {field['soil_moisture_pct_nfk']}% nFK, "
+          f"{field['days_since_last_irrigation']}d since irrigation, "
+          f"{field['field_area_ha']} ha")
     print(f"weather: {weather_source}")
+
     if "error" not in counterfactual:
         alone, fed = counterfactual["this_farm_alone"], counterfactual["federated"]
-        print(f"{'this farm alone:':<20}{alone['decision']:<18}"
-              f"({alone['confidence_pct']:>4} confident, {alone['region_accuracy_pct']} accuracy)")
-        print(f"{'federated:':<20}{fed['decision']:<18}"
-              f"({fed['confidence_pct']:>4} confident, {fed['region_accuracy_pct']} accuracy)")
+        print(f"{'this farm alone:':<20}{alone['need']:<8}"
+              f"({alone['confidence_pct']:>4}, macro-F1 {alone['macro_f1']})")
+        print(f"{'federated:':<20}{fed['need']:<8}"
+              f"({fed['confidence_pct']:>4}, macro-F1 {fed['macro_f1']})")
         if counterfactual["models_disagree"]:
-            print(f"{'>>> THEY DISAGREE':<20}"
-                  + (f"correct answer: {known_answer}" if known_answer else ""))
+            print(">>> THEY DISAGREE")
+
+    if "error" not in plan and plan.get("cubic_metres"):
+        print(f"{'>>> PLAN':<20}{plan['action']} - {plan['depth_mm']} mm = "
+              f"{plan['cubic_metres']:,} m3")
+    elif "error" not in plan:
+        print(f"{'>>> PLAN':<20}{plan['action']}")
     print(f"\nquestion: {question.strip()}\n")

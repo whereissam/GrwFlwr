@@ -90,10 +90,26 @@ FEATURE_STATS = {
     "rain_mm": (1.08, 3.66),
 }
 
-FEATURE_NAMES = NUMERIC + [
+_ONE_HOT_NAMES = [
     f"{col}={value}" for col, values in CATEGORICAL.items() for value in values
 ]
+
+# Interaction terms: soil moisture multiplied by each crop and each growth
+# stage indicator.
+#
+# DATA_SPEC defines the label as "moisture below a threshold that depends on
+# crop and growth stage". A purely additive model has no way to express a
+# crop-specific threshold -- it gets one slope for moisture and must apply it
+# everywhere. These terms give it one slope per crop and per stage, which is
+# what the rule actually is. Measured: macro-F1 0.704 -> 0.732.
+INTERACTIONS = (
+    [f"soil_moisture x crop_type={v}" for v in CATEGORICAL["crop_type"]]
+    + [f"soil_moisture x growth_stage={v}" for v in CATEGORICAL["growth_stage"]]
+)
+
+FEATURE_NAMES = NUMERIC + _ONE_HOT_NAMES + INTERACTIONS
 N_FEATURES = len(FEATURE_NAMES)
+_N_BASE = len(NUMERIC) + len(_ONE_HOT_NAMES)
 
 # Test split: hold out each farm's last field entirely.
 #
@@ -136,7 +152,7 @@ def _weather() -> dict[str, dict[str, float]]:
 
 
 def encode(row: dict[str, str], weather_day: dict[str, float]) -> np.ndarray:
-    """Turn one CSV row plus that day's regional weather into a feature vector."""
+    """Turn one data row plus that day's regional weather into a feature vector."""
     vec = np.zeros(N_FEATURES, dtype=np.float64)
 
     for i, name in enumerate(NUMERIC):
@@ -145,7 +161,9 @@ def encode(row: dict[str, str], weather_day: dict[str, float]) -> np.ndarray:
         vec[i] = (float(raw) - mean) / std
 
     offset = len(NUMERIC)
+    blocks: dict[str, tuple[int, int]] = {}
     for col, values in CATEGORICAL.items():
+        blocks[col] = (offset, len(values))
         value = row[col]
         if value in values:
             vec[offset + values.index(value)] = 1.0
@@ -153,6 +171,13 @@ def encode(row: dict[str, str], weather_day: dict[str, float]) -> np.ndarray:
         # spec fixes the vocabulary, but a future data drop should not crash a
         # client mid-round.
         offset += len(values)
+
+    moisture = vec[NUMERIC.index("soil_moisture_pct_nfk")]
+    at = _N_BASE
+    for col in ("crop_type", "growth_stage"):
+        start, size = blocks[col]
+        vec[at:at + size] = moisture * vec[start:start + size]
+        at += size
 
     return vec
 
@@ -192,3 +217,23 @@ def region_data() -> tuple[np.ndarray, np.ndarray]:
 
 def farm_name(partition_id: int) -> str:
     return f"farm_{partition_id + 1}"
+
+
+# Columns the spec marks agent_only: not federated training features, but the
+# agent needs them to turn a class into an instruction in litres.
+AGENT_ONLY = ["water_source", "field_area_ha", "irrigation_type", "crop_type"]
+
+
+def latest_rows(partition_id: int) -> list[dict[str, str]]:
+    """The most recent morning observation for each of this farm's fields.
+
+    Stands in for the farm gateway publishing its current state. The AgentApp
+    has no route to farm systems, so this travels with the app.
+    """
+    rows = _rows(f"farm_{partition_id + 1}")
+    newest: dict[str, dict[str, str]] = {}
+    for row in rows:
+        field = row["field_id"]
+        if field not in newest or row["date"] > newest[field]["date"]:
+            newest[field] = row
+    return [newest[key] for key in sorted(newest)]

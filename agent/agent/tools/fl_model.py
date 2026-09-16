@@ -1,11 +1,13 @@
 """The team's federated-learning irrigation model.
 
-Replaces the earlier heuristic placeholder. The model is produced by
-`federated/` (FedAvg across four farms) and ships inside the FAB as JSON: the
-AgentApp runs in a remote container with no route to the laptop that trained it.
+Produced by `federated/` (FedAvg across four farms) and shipped inside the FAB:
+the AgentApp runs in a remote container with no route to the machine that
+trained it. Scoring happens in-process, so a farmer's readings never leave.
 
-Scoring happens in-process. There is no inference endpoint to call, so none of
-the egress restrictions apply here, and a farmer's readings never leave the app.
+The encoding here must match `federated/growflwr/data.py` exactly -- same
+column order, vocabularies, normalization constants and interaction terms. All
+of that is read from the model JSON rather than duplicated as constants here,
+and the feature count is checked, so the two cannot drift apart silently.
 """
 
 import json
@@ -13,6 +15,9 @@ import math
 from pathlib import Path
 
 _DATA = Path(__file__).resolve().parent.parent / "data"
+
+_MAX_APPLICATION_MM = 30.0
+_LITRES_PER_MM_HA = 10_000.0
 
 
 class ModelUnavailable(RuntimeError):
@@ -29,134 +34,139 @@ def _load(name: str) -> dict:
     return json.loads(path.read_text())
 
 
-def _score(weights: list[float], bias: float, stats: dict, features: list[str],
-           readings: dict[str, float]) -> tuple[float, dict[str, float]]:
-    """Return (probability, per-feature contribution) for one set of readings."""
-    missing = [f for f in features if f not in readings]
-    if missing:
-        raise ModelUnavailable(f"Readings missing required fields: {missing}")
+def _encode(spec: dict, field: dict, weather: dict) -> list[float]:
+    """Mirror of the training-time encoder, driven by the model's own spec."""
+    numeric, categorical = spec["numeric"], spec["categorical"]
+    stats = spec["feature_stats"]
 
-    logit = float(bias)
-    contributions = {}
-    for name, weight in zip(features, weights):
+    vec: list[float] = []
+    for name in numeric:
+        raw = weather[name] if name in weather else field[name]
         mean, std = stats[name]
-        term = weight * ((float(readings[name]) - mean) / std)
-        contributions[name] = round(term, 3)
-        logit += term
-    return 1.0 / (1.0 + math.exp(-logit)), contributions
+        vec.append((float(raw) - mean) / std)
+
+    blocks: dict[str, int] = {}
+    for col, values in categorical.items():
+        blocks[col] = len(vec)
+        onehot = [0.0] * len(values)
+        if field.get(col) in values:
+            onehot[values.index(field[col])] = 1.0
+        vec.extend(onehot)
+
+    moisture = vec[numeric.index("soil_moisture_pct_nfk")]
+    for col in ("crop_type", "growth_stage"):
+        start, size = blocks[col], len(categorical[col])
+        vec.extend(moisture * v for v in vec[start:start + size])
+
+    expected = len(spec["feature_names"])
+    if len(vec) != expected:
+        raise ModelUnavailable(
+            f"Encoded {len(vec)} features but the model expects {expected}. The "
+            f"agent and the training code have drifted apart -- re-run "
+            f"scripts/sync-model.sh."
+        )
+    return vec
 
 
-def predict_irrigation_safety(readings: dict[str, float]) -> dict:
-    """Score readings with the federated global model."""
+def _softmax(z: list[float]) -> list[float]:
+    top = max(z)
+    e = [math.exp(v - top) for v in z]
+    total = sum(e)
+    return [v / total for v in e]
+
+
+def _score(spec: dict, weights, bias, field: dict, weather: dict) -> list[float]:
+    x = _encode(spec, field, weather)
+    logits = [
+        bias[c] + sum(x[i] * weights[i][c] for i in range(len(x)))
+        for c in range(len(bias))
+    ]
+    return _softmax(logits)
+
+
+def predict_irrigation_need(field: dict, weather: dict) -> dict:
+    """Classify one field as Low / Medium / High irrigation need."""
     model = _load("global_model.json")
-    probability, contributions = _score(
-        model["weights"], model["bias"], model["feature_stats"],
-        model["features"], readings,
-    )
-    ranked = sorted(contributions.items(), key=lambda kv: abs(kv[1]), reverse=True)
+    probs = _score(model, model["weights"], model["bias"], field, weather)
+    idx = max(range(len(probs)), key=probs.__getitem__)
+    names = model["class_names"]
 
     return {
         "source": f"federated model, FedAvg over {model['num_farms']} farms",
-        "decision": "safe to irrigate" if probability >= 0.5 else "do not irrigate",
-        "confidence_pct": f"{probability:.0%}",
-        "probability_safe": round(probability, 3),
-        "region_accuracy_pct": f"{model['region_accuracy']:.1%}",
-        "top_drivers": [
-            {
-                "feature": name,
-                "reading": readings[name],
-                "effect": "supports irrigating" if term > 0 else "argues against",
-            }
-            for name, term in ranked[:3]
-        ],
+        "need": names[str(idx)],
+        "need_class": idx,
+        "confidence_pct": f"{probs[idx]:.0%}",
+        "probabilities": {names[str(i)]: round(p, 3) for i, p in enumerate(probs)},
+        "region_macro_f1": round(model["region_macro_f1"], 3),
+        "region_high_recall_pct": f"{model['region_high_recall']:.0%}",
     }
 
 
-def compare_against_solo(farm_id: str, readings: dict[str, float]) -> dict:
-    """Score the same readings with this farm's go-it-alone model.
+def compare_against_solo(farm_id: str, field: dict, weather: dict) -> dict:
+    """Score the same field with this farm's go-it-alone model.
 
     The counterfactual: what this farmer would have been told if the region had
     never federated. Identical inputs, so any difference is down to whose data
     trained the model.
     """
     solo_file = _load("solo_models.json")
-    index = str(int(farm_id.split("-")[-1]) - 1)
+    index = str(int(farm_id.split("_")[-1]) - 1)
     if index not in solo_file["models"]:
         raise ModelUnavailable(f"No solo model for {farm_id}.")
 
     solo = solo_file["models"][index]
-    probability, _ = _score(
-        solo["weights"], solo["bias"], solo_file["feature_stats"],
-        solo_file["features"], readings,
-    )
-    decision = "safe to irrigate" if probability >= 0.5 else "do not irrigate"
-    federated = predict_irrigation_safety(readings)
+    probs = _score(solo_file, solo["weights"], solo["bias"], field, weather)
+    idx = max(range(len(probs)), key=probs.__getitem__)
+    names = solo_file["class_names"]
+    federated = predict_irrigation_need(field, weather)
 
     return {
         "this_farm_alone": {
-            "decision": decision,
-            "confidence_pct": f"{probability:.0%}",
-            "region_accuracy_pct": f"{solo['region_accuracy']:.1%}",
+            "need": names[str(idx)],
+            "confidence_pct": f"{probs[idx]:.0%}",
+            "macro_f1": round(solo["macro_f1"], 3),
         },
         "federated": {
-            "decision": federated["decision"],
+            "need": federated["need"],
             "confidence_pct": federated["confidence_pct"],
-            "region_accuracy_pct": federated["region_accuracy_pct"],
+            "macro_f1": federated["region_macro_f1"],
         },
-        "models_disagree": decision != federated["decision"],
+        "models_disagree": names[str(idx)] != federated["need"],
     }
 
 
-def water_budget(readings: dict[str, float], horizon_days: float = 2.0) -> dict:
-    """Litres per hectare needed over the horizon, after forecast rain.
+def water_plan(field: dict, weather: dict, need_class: int) -> dict:
+    """Turn a class into litres for this specific field.
 
-    Crop water use is reference evapotranspiration scaled by the crop
-    coefficient; rain already forecast is subtracted, because irrigating on top
-    of it is the waste this system exists to prevent.
+    Depth replaces what the crop has used since the last irrigation --
+    evapotranspiration times days elapsed, less what the on-farm rain gauge
+    caught -- capped at a practical single application. This is a stated
+    agronomic rule, not a model output, and is labelled as such.
     """
-    demand_mm = readings["et0_mm_day"] * readings["crop_coefficient"] * horizon_days
-    deficit_mm = max(0.0, demand_mm - readings["rain_forecast_48h_mm"])
+    if need_class == 0:
+        return {"action": "no irrigation needed", "litres": 0, "depth_mm": 0.0,
+                "basis": "the model classifies need as Low"}
+
+    days = float(field["days_since_last_irrigation"])
+    et0 = float(weather.get("et0_mm", 0.0))
+    rain = float(field.get("onfarm_rain_gauge_mm", 0.0))
+
+    depth = max(0.0, min(et0 * days - rain, _MAX_APPLICATION_MM))
+    if need_class == 1:
+        depth *= 0.6  # Medium: a holding dose, not a full refill
+
+    area = float(field["field_area_ha"])
     return {
-        "horizon_days": horizon_days,
-        "crop_demand_mm": round(demand_mm, 1),
-        "rain_expected_mm": round(readings["rain_forecast_48h_mm"], 1),
-        "net_deficit_mm": round(deficit_mm, 1),
-        "litres_per_hectare": round(deficit_mm * 10_000),
-    }
-
-
-def recommendation(prediction: dict, budget: dict) -> dict:
-    """Reconcile "is it safe" with "is it needed" into one instruction.
-
-    These are different questions and they can disagree: the model can rate
-    irrigating safe while the forecast rain already covers crop demand, which
-    would otherwise produce the useless advice "irrigate, 0 litres". Need is
-    checked first, because water not needed is water not spent.
-    """
-    if "error" in prediction or "error" in budget:
-        return {"action": "unavailable",
-                "reason": "a required figure could not be computed"}
-
-    if budget["net_deficit_mm"] <= 0.0:
-        return {
-            "action": "no need to irrigate",
-            "reason": (f"forecast rain of {budget['rain_expected_mm']} mm already "
-                       f"covers crop demand of {budget['crop_demand_mm']} mm"),
-            "litres_per_hectare": 0,
-        }
-
-    if prediction["probability_safe"] < 0.5:
-        return {
-            "action": "do not irrigate",
-            "reason": (f"the federated model rates irrigating safe at only "
-                       f"{prediction['confidence_pct']}"),
-            "litres_per_hectare": 0,
-        }
-
-    return {
-        "action": "irrigate",
-        "reason": (f"crop demand exceeds forecast rain by "
-                   f"{budget['net_deficit_mm']} mm and the federated model rates "
-                   f"this safe at {prediction['confidence_pct']}"),
-        "litres_per_hectare": budget["litres_per_hectare"],
+        "action": "irrigate" if depth > 0 else "no irrigation needed",
+        "depth_mm": round(depth, 1),
+        "field_area_ha": area,
+        "litres": round(depth * area * _LITRES_PER_MM_HA),
+        # Cubic metres too: a 42 ha field needs millions of litres, which is a
+        # number nobody can read at a glance.
+        "cubic_metres": round(depth * area * _LITRES_PER_MM_HA / 1000),
+        "basis": (f"{et0} mm/day evapotranspiration over {days:.0f} days since last "
+                  f"irrigation, less {rain} mm measured rain, capped at "
+                  f"{_MAX_APPLICATION_MM:.0f} mm"),
+        "water_source": field.get("water_source"),
+        "irrigation_type": field.get("irrigation_type"),
     }

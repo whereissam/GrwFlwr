@@ -21,8 +21,8 @@ fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE"]
 
 [tool.flwr.app.config.agent]
 input = "Should I irrigate today?"
-farm_id = "farm-001"
-scenario = "today"
+farm_id = "farm_1"
+field_id = ""
 
 [tool.flwr.app.components]
 agentapp = "agent.agent_app:app"
