@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the irrigation table. Constants must match data/DATA_SPEC.md."""
+"""Generate the irrigation table. Label constants must match data/DATA_SPEC.md."""
 
 from __future__ import annotations
 
@@ -12,8 +12,11 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
 
-SEASON_START = date(2026, 4, 15)
-SEASON_END = date(2026, 9, 30)
+# In-year window from DATA_SPEC.md; --years repeats that window.
+SEASON_START_MD = (4, 15)
+SEASON_END_MD = (9, 30)
+DEFAULT_YEARS = (2025, 2026)
+DEFAULT_FARMS = 10
 
 CROPS = ("potato", "maize", "sugar_beet")
 SOILS = ("sand", "loamy_sand", "loam")
@@ -25,6 +28,21 @@ WATER_SOURCES = (
     "irrigation_canal",
     "river_pump",
     "farm_reservoir",
+)
+
+# Crop/soil/system specialisation. Spec soils only: sand, loamy_sand, loam.
+# At least one farm never grows a crop that another farm grows.
+FARM_PROFILES = (
+    {"crops": ("potato",), "soils": ("sand",), "irrigation": ("drip",)},
+    {"crops": ("potato",), "soils": ("sand",), "irrigation": ("hose_reel",)},
+    {"crops": ("maize",), "soils": ("loamy_sand",), "irrigation": ("pivot",)},
+    {"crops": ("maize",), "soils": ("loam",), "irrigation": ("hose_reel",)},
+    {"crops": ("sugar_beet",), "soils": ("loam",), "irrigation": ("drip",)},
+    {"crops": ("sugar_beet",), "soils": ("loam",), "irrigation": ("pivot",)},
+    {"crops": ("potato", "maize"), "soils": ("sand", "loamy_sand"), "irrigation": ("drip", "pivot")},
+    {"crops": ("maize", "sugar_beet"), "soils": ("loam",), "irrigation": ("hose_reel", "pivot")},
+    {"crops": ("potato", "sugar_beet"), "soils": ("loamy_sand",), "irrigation": ("drip", "hose_reel")},
+    {"crops": ("potato",), "soils": ("sand", "loamy_sand"), "irrigation": ("pivot",)},
 )
 
 COLUMN_ORDER = [
@@ -109,6 +127,7 @@ SENSOR_DAILY_SD = 3.0
 ET_FACTOR_MEAN = 1.0
 ET_FACTOR_SD = 0.08
 FARM_RAIN_NOISE_SD = 0.4
+DEFAULT_MISSING_RATE = 0.02
 
 
 def clip(value: float, lo: float, hi: float) -> float:
@@ -157,26 +176,42 @@ def irrigation_need(true_moisture: float, crop: str, stage: str, maturity: str) 
     return 2
 
 
-def regional_weather(rng: random.Random) -> list[dict]:
+def drought_scales(day: date) -> tuple[float, float]:
+    """ET0 scale and wet-probability scale. Does not change Kc or thresholds."""
+    md = (day.month, day.day)
+    if day.year == 2026 and (6, 8) <= md <= (7, 28):
+        return 1.45, 0.18
+    if day.year == 2026 and (8, 1) <= md <= (8, 18):
+        return 1.25, 0.35
+    if day.year == 2025 and (7, 1) <= md <= (7, 12):
+        return 1.20, 0.50
+    return 1.0, 1.0
+
+
+def regional_weather(years: list[int], rng: random.Random) -> list[dict]:
     rows = []
-    for day in daterange(SEASON_START, SEASON_END):
-        doy = day.timetuple().tm_yday
-        seasonal = 2.2 + 2.4 * math.sin(2 * math.pi * (doy - 105) / 365)
-        et0 = clip(seasonal + rng.gauss(0, 0.45), 0.8, 6.8)
-        wet_p = 0.22 + 0.08 * math.cos(2 * math.pi * (doy - 60) / 365)
-        if rng.random() < wet_p:
-            rain = rng.expovariate(1 / 6.5)
-            if rng.random() < 0.12:
-                rain += rng.uniform(12.0, 28.0)
-        else:
-            rain = rng.uniform(0.0, 0.4) if rng.random() < 0.08 else 0.0
-        rows.append(
-            {
-                "date": day.isoformat(),
-                "et0_mm": round(et0, 2),
-                "rain_mm": round(max(0.0, rain), 1),
-            }
-        )
+    for year in years:
+        start = date(year, *SEASON_START_MD)
+        end = date(year, *SEASON_END_MD)
+        for day in daterange(start, end):
+            doy = day.timetuple().tm_yday
+            et_scale, wet_scale = drought_scales(day)
+            seasonal = 2.2 + 2.4 * math.sin(2 * math.pi * (doy - 105) / 365)
+            et0 = clip((seasonal + rng.gauss(0, 0.45)) * et_scale, 0.8, 7.8)
+            wet_p = (0.22 + 0.08 * math.cos(2 * math.pi * (doy - 60) / 365)) * wet_scale
+            if rng.random() < wet_p:
+                rain = rng.expovariate(1 / 6.5)
+                if rng.random() < 0.12:
+                    rain += rng.uniform(12.0, 28.0)
+            else:
+                rain = rng.uniform(0.0, 0.4) if rng.random() < 0.08 else 0.0
+            rows.append(
+                {
+                    "date": day.isoformat(),
+                    "et0_mm": round(et0, 2),
+                    "rain_mm": round(max(0.0, rain), 1),
+                }
+            )
     return rows
 
 
@@ -190,29 +225,39 @@ class FieldSpec:
     irrigation_type: str
     water_source: str
     field_area_ha: float
-    planting_date: date
+    plant_month: int
+    plant_day: int
     taw_mm: float
     et_factor: float
     sensor_bias: float
+    missing_rate: float
+    stuck_p: float
 
 
-def build_fields(n_farms: int, rng: random.Random) -> list[FieldSpec]:
-    fields: list[FieldSpec] = []
-    planting_windows = {
-        "potato": (date(2026, 4, 8), date(2026, 4, 22)),
-        "sugar_beet": (date(2026, 4, 1), date(2026, 4, 18)),
-        "maize": (date(2026, 4, 18), date(2026, 5, 6)),
+def planting_window(crop: str, year: int) -> tuple[date, date]:
+    windows = {
+        "potato": ((4, 8), (4, 22)),
+        "sugar_beet": ((4, 1), (4, 18)),
+        "maize": ((4, 18), (5, 6)),
     }
+    start_md, end_md = windows[crop]
+    return date(year, *start_md), date(year, *end_md)
+
+
+def build_fields(n_farms: int, rng: random.Random, missing_rate: float) -> list[FieldSpec]:
+    fields: list[FieldSpec] = []
     for farm_i in range(1, n_farms + 1):
         farm_id = f"farm_{farm_i}"
-        n_fields = rng.randint(3, 5)
+        profile = FARM_PROFILES[(farm_i - 1) % len(FARM_PROFILES)]
+        n_fields = rng.randint(3, 4)
         water_source = WATER_SOURCES[(farm_i - 1) % len(WATER_SOURCES)]
         for field_i in range(1, n_fields + 1):
-            crop = CROPS[(farm_i + field_i) % len(CROPS)]
-            soil = rng.choice(SOILS)
-            start, end = planting_windows[crop]
+            crop = profile["crops"][(field_i - 1) % len(profile["crops"])]
+            soil = profile["soils"][(field_i - 1) % len(profile["soils"])]
+            irrigation = profile["irrigation"][(field_i - 1) % len(profile["irrigation"])]
+            start, end = planting_window(crop, 2026)
             span = (end - start).days
-            planting = start + timedelta(days=rng.randint(0, span))
+            planted = start + timedelta(days=rng.randint(0, span))
             fields.append(
                 FieldSpec(
                     farm_id=farm_id,
@@ -220,13 +265,16 @@ def build_fields(n_farms: int, rng: random.Random) -> list[FieldSpec]:
                     crop_type=crop,
                     soil_type=soil,
                     crop_variety_maturity=rng.choice(MATURITIES),
-                    irrigation_type=IRRIGATION_TYPES[(farm_i + field_i) % 3],
+                    irrigation_type=irrigation,
                     water_source=water_source,
                     field_area_ha=round(rng.uniform(3.5, 48.0), 1),
-                    planting_date=planting,
+                    plant_month=planted.month,
+                    plant_day=planted.day,
                     taw_mm=TAW_MM[soil],
                     et_factor=clip(rng.gauss(ET_FACTOR_MEAN, ET_FACTOR_SD), 0.75, 1.25),
                     sensor_bias=rng.gauss(0.0, SENSOR_BIAS_SD),
+                    missing_rate=missing_rate,
+                    stuck_p=0.012,
                 )
             )
     return fields
@@ -235,9 +283,16 @@ def build_fields(n_farms: int, rng: random.Random) -> list[FieldSpec]:
 def farm_rain_series(
     weather: list[dict], n_farms: int, rng: random.Random
 ) -> dict[tuple[str, str], float]:
-    factors = {
-        f"farm_{i}": rng.uniform(0.82, 1.18) for i in range(1, n_farms + 1)
-    }
+    factors = {}
+    for i in range(1, n_farms + 1):
+        profile = FARM_PROFILES[(i - 1) % len(FARM_PROFILES)]
+        # Sand-specialist farms catch a bit less of the regional rain.
+        if profile["soils"][0] == "sand":
+            factors[f"farm_{i}"] = rng.uniform(0.62, 0.92)
+        elif profile["soils"][0] == "loam":
+            factors[f"farm_{i}"] = rng.uniform(0.95, 1.22)
+        else:
+            factors[f"farm_{i}"] = rng.uniform(0.80, 1.10)
     out: dict[tuple[str, str], float] = {}
     for row in weather:
         for farm_id, factor in factors.items():
@@ -274,62 +329,90 @@ def simulate(
     farm_rain: dict[tuple[str, str], float],
     rng: random.Random,
 ) -> list[dict]:
-    true_m = clip(rng.uniform(52.0, 78.0), 0.0, 100.0)
-    last_irrigation_date: date | None = None
-    last_irrigation_mm = 0.0
     rows: list[dict] = []
-
+    by_year: dict[int, list[dict]] = {}
     for met in weather:
-        day = date.fromisoformat(met["date"])
-        dap = (day - spec.planting_date).days
-        if dap < 0:
-            et_mm = float(met["et0_mm"]) * 0.15 * spec.et_factor
+        by_year.setdefault(date.fromisoformat(met["date"]).year, []).append(met)
+
+    for year, year_weather in by_year.items():
+        true_m = clip(rng.uniform(52.0, 78.0), 0.0, 100.0)
+        last_irrigation_date: date | None = None
+        last_irrigation_mm = 0.0
+        last_sensor: float | None = None
+        stuck_left = 0
+        drift = 0.0
+        try:
+            planting = date(year, spec.plant_month, spec.plant_day)
+        except ValueError:
+            planting = date(year, spec.plant_month, 28)
+
+        for met in year_weather:
+            day = date.fromisoformat(met["date"])
+            dap = (day - planting).days
             rain = farm_rain[(spec.farm_id, met["date"])]
-            true_m += 100.0 * (rain - et_mm) / spec.taw_mm
+            if dap < 0:
+                et_mm = float(met["et0_mm"]) * 0.15 * spec.et_factor
+                true_m += 100.0 * (rain - et_mm) / spec.taw_mm
+                true_m = clip(true_m, 0.0, 100.0)
+                continue
+
+            stage = growth_stage(spec.crop_type, spec.crop_variety_maturity, dap)
+            days_since = (
+                (day - last_irrigation_date).days if last_irrigation_date else dap
+            )
+            need = irrigation_need(
+                true_m, spec.crop_type, stage, spec.crop_variety_maturity
+            )
+            drift += rng.gauss(0.0, 0.04)
+            live = clip(
+                true_m + spec.sensor_bias + drift + rng.gauss(0.0, SENSOR_DAILY_SD),
+                0.0,
+                100.0,
+            )
+            if stuck_left > 0 and last_sensor is not None:
+                sensor_value: float | None = last_sensor
+                stuck_left -= 1
+            elif rng.random() < spec.stuck_p:
+                sensor_value = last_sensor if last_sensor is not None else live
+                stuck_left = rng.randint(3, 8)
+            else:
+                sensor_value = live
+                last_sensor = live
+
+            if rng.random() < spec.missing_rate:
+                written: float | str = ""
+            else:
+                written = round(sensor_value, 1)
+                last_sensor = float(written)
+
+            rows.append(
+                {
+                    "farm_id": spec.farm_id,
+                    "field_id": spec.field_id,
+                    "date": met["date"],
+                    "soil_moisture_pct_nfk": written,
+                    "growth_stage": stage,
+                    "crop_type": spec.crop_type,
+                    "days_since_last_irrigation": days_since,
+                    "previous_irrigation_mm": last_irrigation_mm,
+                    "onfarm_rain_gauge_mm": rain,
+                    "soil_type": spec.soil_type,
+                    "crop_variety_maturity": spec.crop_variety_maturity,
+                    "days_after_planting": dap,
+                    "irrigation_type": spec.irrigation_type,
+                    "water_source": spec.water_source,
+                    "field_area_ha": spec.field_area_ha,
+                    "irrigation_need": need,
+                }
+            )
+
+            applied = maybe_irrigate(need, true_m, spec, rng)
+            et_mm = KC[spec.crop_type][stage] * float(met["et0_mm"]) * spec.et_factor
+            true_m += 100.0 * (rain + applied - et_mm) / spec.taw_mm
             true_m = clip(true_m, 0.0, 100.0)
-            continue
-
-        stage = growth_stage(spec.crop_type, spec.crop_variety_maturity, dap)
-        rain = farm_rain[(spec.farm_id, met["date"])]
-        days_since = (
-            (day - last_irrigation_date).days if last_irrigation_date else dap
-        )
-        need = irrigation_need(
-            true_m, spec.crop_type, stage, spec.crop_variety_maturity
-        )
-        sensor = clip(
-            true_m + spec.sensor_bias + rng.gauss(0.0, SENSOR_DAILY_SD),
-            0.0,
-            100.0,
-        )
-        rows.append(
-            {
-                "farm_id": spec.farm_id,
-                "field_id": spec.field_id,
-                "date": met["date"],
-                "soil_moisture_pct_nfk": round(sensor, 1),
-                "growth_stage": stage,
-                "crop_type": spec.crop_type,
-                "days_since_last_irrigation": days_since,
-                "previous_irrigation_mm": last_irrigation_mm,
-                "onfarm_rain_gauge_mm": rain,
-                "soil_type": spec.soil_type,
-                "crop_variety_maturity": spec.crop_variety_maturity,
-                "days_after_planting": dap,
-                "irrigation_type": spec.irrigation_type,
-                "water_source": spec.water_source,
-                "field_area_ha": spec.field_area_ha,
-                "irrigation_need": need,
-            }
-        )
-
-        applied = maybe_irrigate(need, true_m, spec, rng)
-        et_mm = KC[spec.crop_type][stage] * float(met["et0_mm"]) * spec.et_factor
-        true_m += 100.0 * (rain + applied - et_mm) / spec.taw_mm
-        true_m = clip(true_m, 0.0, 100.0)
-        if applied:
-            last_irrigation_mm = applied
-            last_irrigation_date = day
+            if applied:
+                last_irrigation_mm = applied
+                last_irrigation_date = day
 
     return rows
 
@@ -342,12 +425,17 @@ def write_csv(path: Path, rows: list[dict], fieldnames: list[str]) -> None:
         writer.writerows(rows)
 
 
-def schema_document() -> dict:
+def schema_document(years: list[int], n_farms: int) -> dict:
     return {
-        "dataset": "onfarm_irrigation_need_v2",
+        "dataset": "onfarm_irrigation_need_v3",
         "spec": "DATA_SPEC.md",
         "grain": "one row = one field on one date (morning observation)",
-        "season": {"start": SEASON_START.isoformat(), "end": SEASON_END.isoformat()},
+        "season_window": {
+            "start_md": list(SEASON_START_MD),
+            "end_md": list(SEASON_END_MD),
+        },
+        "years": years,
+        "n_farms_default": n_farms,
         "label_mapping": {str(k): v for k, v in LABEL_MAPPING.items()},
         "allowed_values": {
             "crop_type": list(CROPS),
@@ -370,7 +458,22 @@ def schema_document() -> dict:
             "irrigation_type",
         ],
         "columns": COLUMN_ORDER,
-        "soil_moisture_pct_nfk": {"clip": [0, 100], "source": "noisy sensor"},
+        "soil_moisture_pct_nfk": {
+            "clip": [0, 100],
+            "source": "noisy sensor",
+            "missing": "empty cell (gap or dropout)",
+        },
+        "partition_design": {
+            "profiles": [
+                {
+                    "farm_offset": i + 1,
+                    "crops": list(p["crops"]),
+                    "soils": list(p["soils"]),
+                    "irrigation": list(p["irrigation"]),
+                }
+                for i, p in enumerate(FARM_PROFILES)
+            ]
+        },
         "label": {
             "column": "irrigation_need",
             "computed_from": "true_moisture_pct_nfk",
@@ -393,9 +496,11 @@ def validate(rows: list[dict], n_farms: int) -> None:
         need = int(row["irrigation_need"])
         if need not in allowed_need:
             raise SystemExit(f"bad label {need}")
-        moisture = float(row["soil_moisture_pct_nfk"])
-        if moisture < 0 or moisture > 100:
-            raise SystemExit(f"moisture out of range {moisture}")
+        raw = row["soil_moisture_pct_nfk"]
+        if raw != "":
+            moisture = float(raw)
+            if moisture < 0 or moisture > 100:
+                raise SystemExit(f"moisture out of range {moisture}")
         if row["crop_type"] not in CROPS:
             raise SystemExit(row["crop_type"])
         if row["soil_type"] not in SOILS:
@@ -422,10 +527,29 @@ def validate(rows: list[dict], n_farms: int) -> None:
         raise SystemExit(f"farm ids {farms} != {expected}")
 
 
+def parse_years(raw: str) -> list[int]:
+    years = [int(part.strip()) for part in raw.split(",") if part.strip()]
+    if not years:
+        raise SystemExit("--years must list at least one year")
+    return years
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate irrigation tables from DATA_SPEC.md")
-    parser.add_argument("--farms", type=int, default=4)
+    parser.add_argument("--farms", type=int, default=DEFAULT_FARMS)
     parser.add_argument("--seed", type=int, default=20260916)
+    parser.add_argument(
+        "--years",
+        type=str,
+        default=",".join(str(y) for y in DEFAULT_YEARS),
+        help="Comma-separated years; each uses the Apr 15–Sep 30 window",
+    )
+    parser.add_argument(
+        "--missing-rate",
+        type=float,
+        default=DEFAULT_MISSING_RATE,
+        help="Per-row probability that soil_moisture_pct_nfk is left empty",
+    )
     parser.add_argument(
         "--out",
         type=Path,
@@ -439,12 +563,18 @@ def main() -> None:
     args = parse_args()
     if args.farms < 1:
         raise SystemExit("--farms must be >= 1")
+    if not 0.0 <= args.missing_rate < 1.0:
+        raise SystemExit("--missing-rate must be in [0, 1)")
+    years = parse_years(args.years)
     rng = random.Random(args.seed)
     out: Path = args.out
     out.mkdir(parents=True, exist_ok=True)
 
-    weather = regional_weather(rng)
-    fields = build_fields(args.farms, rng)
+    for old in out.glob("farm_*.csv"):
+        old.unlink()
+
+    weather = regional_weather(years, rng)
+    fields = build_fields(args.farms, rng, args.missing_rate)
     farm_rain = farm_rain_series(weather, args.farms, rng)
 
     all_rows: list[dict] = []
@@ -461,16 +591,32 @@ def main() -> None:
         index = farm_id.split("_", 1)[1]
         write_csv(out / f"farm_{index}.csv", farm_rows, COLUMN_ORDER)
     write_csv(out / "centralized_baseline.csv", all_rows, COLUMN_ORDER)
-    (out / "schema.json").write_text(json.dumps(schema_document(), indent=2) + "\n")
+    (out / "schema.json").write_text(
+        json.dumps(schema_document(years, args.farms), indent=2) + "\n"
+    )
 
     counts = {name: 0 for name in LABEL_MAPPING.values()}
     for row in all_rows:
         counts[LABEL_MAPPING[int(row["irrigation_need"])]] += 1
+    missing = sum(1 for row in all_rows if row["soil_moisture_pct_nfk"] == "")
+    crops_by_farm = {
+        farm_id: sorted({row["crop_type"] for row in farm_rows})
+        for farm_id, farm_rows in by_farm.items()
+    }
+    high_by_farm = {
+        farm_id: sum(int(row["irrigation_need"]) == 2 for row in farm_rows)
+        for farm_id, farm_rows in by_farm.items()
+    }
     summary = {
         "n_rows": len(all_rows),
         "n_farms": args.farms,
         "n_fields": len({row["field_id"] for row in all_rows}),
+        "years": years,
         "label_counts": counts,
+        "high_rate": round(counts["High"] / len(all_rows), 4) if all_rows else 0,
+        "missing_moisture_rows": missing,
+        "crops_by_farm": crops_by_farm,
+        "high_rows_by_farm": high_by_farm,
         "seed": args.seed,
         "out": str(out),
     }
