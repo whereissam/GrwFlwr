@@ -33,10 +33,8 @@ MODEL = "openai/gpt-5.6-sol"
 # Each farm's approximate location, for the weather lookup. The dataset carries
 # no coordinates; these place the region on the Canal d'Urgell, Lleida.
 FARM_LOCATION = {
-    "farm_1": (41.62, 0.62),
-    "farm_2": (41.60, 0.70),
-    "farm_3": (41.47, 0.86),
-    "farm_4": (41.41, 0.95),
+    "farmer_1": (41.62, 0.62),
+    "farmer_2": (41.47, 0.86),
 }
 
 SYSTEM_PROMPT = """\
@@ -93,7 +91,7 @@ def main(agent: AgentSession, context: Context) -> None:
     if not isinstance(question, str) or not question.strip():
         raise ValueError("agent.input must be a non-empty string")
 
-    farm_id = str(context.run_config.get("agent.farm_id", "farm_1"))
+    farm_id = str(context.run_config.get("agent.farm_id", "farmer_1"))
     field_id = str(context.run_config.get("agent.field_id", "")).strip()
 
     # No field named: answer about the driest one, which is what a farmer

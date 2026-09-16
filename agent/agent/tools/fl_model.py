@@ -110,7 +110,11 @@ def compare_against_solo(farm_id: str, field: dict, weather: dict) -> dict:
     trained the model.
     """
     solo_file = _load("solo_models.json")
-    index = str(int(farm_id.split("_")[-1]) - 1)
+    # farm ids are "farmer_1", "farmer_2" -- partition index is the trailing number
+    try:
+        index = str(int(farm_id.rsplit("_", 1)[-1]) - 1)
+    except ValueError as err:
+        raise ModelUnavailable(f"Cannot parse a partition index from {farm_id!r}.") from err
     if index not in solo_file["models"]:
         raise ModelUnavailable(f"No solo model for {farm_id}.")
 

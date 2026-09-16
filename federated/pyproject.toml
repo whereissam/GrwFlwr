@@ -48,4 +48,4 @@ learning-rate = 0.3
 # default = "local-sim"
 
 # [tool.flwr.federations.local-sim]
-# options.num-supernodes = 4
+# options.num-supernodes = 2

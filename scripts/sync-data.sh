@@ -14,7 +14,7 @@ import csv, json, pathlib, sys
 
 src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 written = 0
-for name in ["farm_1", "farm_2", "farm_3", "farm_4", "regional_weather"]:
+for name in ["partitions", "regional_weather"]:
     rows = list(csv.DictReader((src / f"{name}.csv").open()))
     with (dst / f"{name}.jsonl").open("w") as fh:
         for row in rows:

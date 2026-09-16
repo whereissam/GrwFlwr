@@ -177,20 +177,37 @@ def main(grid: Grid, context: Context) -> None:
 
     gains = [fed_f1 - s for s in solo_f1]
     best, worst = int(np.argmax(gains)), int(np.argmin(gains))
-    print(f"\nMost helped:  {farm_name(best)} ({gains[best]:+.3f} macro-F1) - "
-          f"thin local history.")
-    print(f"Least helped: {farm_name(worst)} ({gains[worst]:+.3f} macro-F1) - "
-          f"already holds the most data.")
-    print("Federation is not free for everyone: the best-resourced farm gives up "
-          "a little\naccuracy so the weakest gain a lot. That trade is the point, "
-          "and it is why the\nregional authority owns the model rather than the "
-          "largest farm.")
+
+    # Say what actually happened rather than a fixed story. Whether federation
+    # helps everyone depends on how specialised the farms are, and that changes
+    # with the dataset -- an earlier four-farm version had one farm losing.
+    print(f"\nMost helped:  {farm_name(best)} ({gains[best]:+.3f} macro-F1)")
+    if gains[worst] > 0:
+        print(f"Least helped: {farm_name(worst)} ({gains[worst]:+.3f} macro-F1) "
+              f"- still better off than alone.")
+        print("Every farm gains here. The farms are specialised, so neither has "
+              "observed the\nother's crop at all -- alone, a model has no signal "
+              "off its own ground.")
+    else:
+        print(f"Least helped: {farm_name(worst)} ({gains[worst]:+.3f} macro-F1) "
+              f"- worse off than alone.")
+        print("Federation is not free for everyone here: a well-resourced farm "
+              "gives up a little\naccuracy so the weakest gain a lot. That trade "
+              "is why the regional authority\nowns the model rather than the "
+              "largest farm.")
 
     print(f"\nHigh-need recall (the class that matters): federated "
           f"{fed_rec[2]:.0%} of {counts[2]} held-out High rows.")
     print(f"No single farm holds more than "
           f"{max(int(np.bincount(farm_data(f)[1], minlength=NUM_CLASSES)[2]) for f in range(NUM_FARMS))} "
           f"High examples; together they hold {total_high}.")
+
+    crops = {}
+    for fid in range(NUM_FARMS):
+        seen = {r["crop_type"] for r in latest_rows(fid)}
+        crops[farm_name(fid)] = sorted(seen)
+    print("\nCrops each farm has ever observed: "
+          + "; ".join(f"{k}: {', '.join(v)}" for k, v in crops.items()))
 
     payload = sum(p.nbytes for p in fed)
     rows = sum(len(farm_data(f)[0]) for f in range(NUM_FARMS))

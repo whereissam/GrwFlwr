@@ -8,8 +8,9 @@ agronomic structure (crop coefficients, growth stages, soil water capacity) is
 plausible, but real sensor noise, failure modes and regional drift are absent,
 so error on real data would very likely be larger.
 
-Rows come from `data/farm_*.csv` (one row = one field on one morning) joined to
-`data/regional_weather.csv` by date. Column names, label mapping and allowed
+Rows come from `data/partitions.csv` (one row = one field on one morning),
+split on `farm_id` into Flower partitions, joined to `data/regional_weather.csv`
+by date. Column names, label mapping and allowed
 values follow `data/DATA_SPEC.md` and must not be renamed.
 
 Two things about this data shape the whole project:
@@ -17,9 +18,13 @@ Two things about this data shape the whole project:
 1. The label is three-class and badly imbalanced -- roughly 76% Low, 21% Medium,
    2% High. Accuracy is therefore a useless metric: always predicting Low scores
    76%. Macro-F1 and High-class recall are what matter.
-2. High is rare *per farm*: 10-18 examples across an entire season. That is too
-   few to learn from alone and is exactly what federating fixes -- pooled, there
-   are 54. This is the strongest argument the project has.
+2. The farms are *specialised*: farmer_1 grows only potato on sand, farmer_2 only
+   maize on loam. Neither has ever observed the other's crop, so a solo model is
+   not merely weaker off its own ground -- it has no signal there at all. This is
+   the sharpest version of the argument for federating.
+3. Roughly 2% of soil-moisture cells are empty (sensor dropout) and some sensors
+   stick on the last reading for days. Missing values are imputed to the regional
+   mean, which in standardized space is exactly zero -- see `encode`.
 """
 
 from __future__ import annotations
@@ -81,13 +86,13 @@ CATEGORICAL = {
 # published by the authority. Deriving these per-farm would make each client's
 # feature space different and quietly break averaging.
 FEATURE_STATS = {
-    "soil_moisture_pct_nfk": (60.75, 14.37),
-    "days_since_last_irrigation": (11.77, 11.21),
-    "previous_irrigation_mm": (21.54, 14.69),
-    "onfarm_rain_gauge_mm": (1.15, 3.51),
-    "days_after_planting": (83.87, 47.86),
-    "et0_mm": (3.78, 0.86),
-    "rain_mm": (1.08, 3.66),
+    "soil_moisture_pct_nfk": (57.88, 13.84),
+    "days_since_last_irrigation": (9.54, 11.65),
+    "previous_irrigation_mm": (17.78, 10.87),
+    "onfarm_rain_gauge_mm": (0.84, 2.65),
+    "days_after_planting": (81.95, 47.22),
+    "et0_mm": (4.22, 1.35),
+    "rain_mm": (0.82, 3.02),
 }
 
 _ONE_HOT_NAMES = [
@@ -111,16 +116,17 @@ FEATURE_NAMES = NUMERIC + _ONE_HOT_NAMES + INTERACTIONS
 N_FEATURES = len(FEATURE_NAMES)
 _N_BASE = len(NUMERIC) + len(_ONE_HOT_NAMES)
 
-# Test split: hold out each farm's last field entirely.
+# Test split: train on the 2025 season, test on 2026.
 #
-# Splitting by date was tried first and left only 2 High rows in the whole
-# regional test set -- High clusters in midsummer and the season ends in
-# September -- which makes the one metric that matters unmeasurable. Splitting
-# by field keeps the label distribution while still avoiding leakage between
-# consecutive days of the same field. "Last field" is a fixed rule, not a
-# choice made after looking at which split scored best.
+# The dataset now spans two seasons, so the honest evaluation is "predict a year
+# you have not seen" -- new weather, new drought timing. That is what a farmer
+# actually faces. An earlier field-level holdout was used when only one season
+# existed; this supersedes it.
+TEST_YEAR = "2026"
 
-NUM_FARMS = 4
+# Partitions are farm_id values inside one file.
+FARM_IDS = ["farmer_1", "farmer_2"]
+NUM_FARMS = len(FARM_IDS)
 
 
 def _rows(name: str) -> list[dict[str, str]]:
@@ -156,9 +162,18 @@ def encode(row: dict[str, str], weather_day: dict[str, float]) -> np.ndarray:
     vec = np.zeros(N_FEATURES, dtype=np.float64)
 
     for i, name in enumerate(NUMERIC):
-        raw = weather_day[name] if name in weather_day else float(row[name])
         mean, std = FEATURE_STATS[name]
-        vec[i] = (float(raw) - mean) / std
+        if name in weather_day:
+            vec[i] = (float(weather_day[name]) - mean) / std
+            continue
+        raw = row.get(name, "")
+        if raw in ("", None):
+            # Sensor dropout: ~2% of soil-moisture cells are empty. Impute the
+            # regional mean, which is 0 in standardized space -- the feature
+            # simply stops contributing rather than the row being discarded.
+            vec[i] = 0.0
+        else:
+            vec[i] = (float(raw) - mean) / std
 
     offset = len(NUMERIC)
     blocks: dict[str, tuple[int, int]] = {}
@@ -182,26 +197,27 @@ def encode(row: dict[str, str], weather_day: dict[str, float]) -> np.ndarray:
     return vec
 
 
-def _load_farm(name: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _load_partition(farm_id: str) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     weather = _weather()
-    xs, ys, fields = [], [], []
+    xs, ys, years = [], [], []
 
-    for row in _rows(name):
+    for row in _rows("partitions"):
+        if row["farm_id"] != farm_id:
+            continue
         day = weather.get(row["date"])
         if day is None:
             continue  # no weather for that date; skip rather than impute
         xs.append(encode(row, day))
         ys.append(int(row["irrigation_need"]))
-        fields.append(row["field_id"])
+        years.append(row["date"][:4])
 
-    return np.array(xs), np.array(ys, dtype=np.int64), np.array(fields)
+    return np.array(xs), np.array(ys, dtype=np.int64), np.array(years)
 
 
 def farm_data(partition_id: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return (x_train, y_train, x_test, y_test) for one farm, held out by field."""
-    x, y, fields = _load_farm(f"farm_{partition_id + 1}")
-    held_out = sorted(set(fields))[-1]
-    train = fields != held_out
+    """Return (x_train, y_train, x_test, y_test) for one farm, split by season."""
+    x, y, years = _load_partition(FARM_IDS[partition_id])
+    train = years != TEST_YEAR
     return x[train], y[train], x[~train], y[~train]
 
 
@@ -216,7 +232,7 @@ def region_data() -> tuple[np.ndarray, np.ndarray]:
 
 
 def farm_name(partition_id: int) -> str:
-    return f"farm_{partition_id + 1}"
+    return FARM_IDS[partition_id]
 
 
 # Columns the spec marks agent_only: not federated training features, but the
@@ -230,7 +246,8 @@ def latest_rows(partition_id: int) -> list[dict[str, str]]:
     Stands in for the farm gateway publishing its current state. The AgentApp
     has no route to farm systems, so this travels with the app.
     """
-    rows = _rows(f"farm_{partition_id + 1}")
+    rows = [r for r in _rows("partitions")
+            if r["farm_id"] == FARM_IDS[partition_id]]
     newest: dict[str, dict[str, str]] = {}
     for row in rows:
         field = row["field_id"]
