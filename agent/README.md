@@ -1,47 +1,39 @@
----
-tags: [agentapp]
-dataset: []
-framework: []
----
+# GrwFlwr - your agentic watering advisor
 
-# Flower AgentApp
+This agentic app helps you, a smallholder farmer, whether to water today,
+combining live weather, locally recorded farm data, and a federated-learning
+model - reasoned over by **Flower's Endeavor model**.
 
-This minimal `AgentApp` uses the OpenAI SDK to send the configured `agent.input`
-through Flower Runtime. It republishes every streamed response event to the
-frontend and prints the final response text. Use it as a starting point for a
-custom Flower Agent.
+## How it works
 
-Flower Runtime supplies the SDK base URL and task token, so the AgentApp does
-not need provider credentials.
+For each question, the agent gathers three inputs and hands them to the
+model as context:
 
-## Build
+- **Weather** - live forecast from [Open-Meteo](https://open-meteo.com).
+- **Local farm data** - soil moisture, crop, etc., from
+  [agent/data/farms.json](agent/data/farms.json).
+- **Global model prediction** - the team's federated-learning watering
+  model ([agent/tools/fl_model.py](agent/tools/fl_model.py)).
 
-Install the project and build its Flower App Bundle (FAB):
+The model (`flower-endeavor-v1.0`) reasons over all three and returns a water now / wait / how much water recommendation. It can e.g. create a daily or hourly automation to check if it should water automatically.
+
+## Installation and setup
 
 ```shell
 uv sync
 uv run flwr build
-```
-
-## Customize and run
-
-Edit `agent/agent_app.py` to change the model or add your agent logic. Then log
-in and run the app on SuperGrid:
-
-```shell
 uv run flwr login supergrid
 uv run flwr run . supergrid --stream
 ```
 
-Override the default input for a run with:
+Override the default input, farm id, or location:
 
 ```shell
 uv run flwr run . supergrid \
-  --run-config 'agent.input="Explain agent harness in one paragraph."' \
+  --run-config 'agent.input="Should I water today?" agent.farm_id="farm-001" agent.latitude=52.52 agent.longitude=13.405' \
   --stream
 ```
 
-## Learn more
+## License
 
-See the [Flower Agent documentation](https://flower.ai/docs/agent/) for more
-tutorials and guides.
+MIT — see [LICENSE](LICENSE).

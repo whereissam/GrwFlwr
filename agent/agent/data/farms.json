@@ -1,0 +1,10 @@
+{
+  "farm-001": {
+    "name": "Demo Farm",
+    "crop": "maize",
+    "soil_type": "loam",
+    "soil_moisture_pct": 18.5,
+    "last_irrigation": "2026-09-14",
+    "irrigation_system": "drip"
+  }
+}
