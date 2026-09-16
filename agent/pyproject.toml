@@ -17,10 +17,13 @@ packages = ["agent"]
 publisher = "flwrlabs"
 fab-format-version = 1
 flwr-version-target = "1.35.0"
-fab-include = ["agent/**/*.py", "LICENSE"]
+fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE"]
 
 [tool.flwr.app.config.agent]
-input = "Explain."
+input = "Should I irrigate today?"
+farm_id = "farm-001"
+latitude = 52.52
+longitude = 13.405
 
 [tool.flwr.app.components]
 agentapp = "agent.agent_app:app"
