@@ -18,7 +18,7 @@ publisher = "julianp"
 display-name = "GrwFlwr"
 fab-format-version = 1
 flwr-version-target = "1.35.0"
-fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE"]
+fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE", "README.md"]
 
 [tool.flwr.app.config.agent]
 input = "Should I water today?"
