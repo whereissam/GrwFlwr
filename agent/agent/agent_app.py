@@ -1,4 +1,4 @@
-"""GrowFlwr: a Flower AgentApp that advises farmers on irrigation decisions.
+"""GrwFlwr: a Flower AgentApp that advises farmers on watering decisions.
 
 Combines a live weather forecast, the team's federated-learning irrigation
 model, and locally recorded field data, then lets the model explain the result.
@@ -10,8 +10,10 @@ the answer is computed before the model is called -- the model explains figures,
 it does not produce them.
 """
 
+import datetime
 import json
 import os
+from zoneinfo import ZoneInfo
 
 from flwr.agentapp import AgentApp, AgentSession
 from flwr.app import Context
@@ -28,7 +30,7 @@ from .tools import (
     weather_features,
 )
 
-MODEL = "openai/gpt-5.6-sol"
+MODEL = "flower-endeavor-v1.0"
 
 # Each farm's approximate location, for the weather lookup. The dataset carries
 # no coordinates; these place the region on the Canal d'Urgell, Lleida.
@@ -38,7 +40,7 @@ FARM_LOCATION = {
 }
 
 SYSTEM_PROMPT = """\
-You are GrowFlwr, an irrigation advisor for farms sharing one water region.
+You are GrwFlwr, a watering advisor for farms sharing one water region.
 
 You are given a DATA block: one field's latest sensor readings, a weather
 forecast, a Low/Medium/High need classification from a model trained
@@ -72,6 +74,98 @@ def _safe_call(label: str, func) -> dict:
         return {"error": f"{label} unavailable: {exc}"}
 
 
+def _next_daily_run_at(hour: int, minute: int, tz: str) -> str:
+    """Return the next occurrence of hour:minute in tz as an ISO 8601 timestamp."""
+    now = datetime.datetime.now(ZoneInfo(tz))
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += datetime.timedelta(days=1)
+    return candidate.isoformat()
+
+
+def _setup_daily_automation(agent: AgentSession, context: Context) -> None:
+    """One-off setup: register a daily recurring run via Flower's automation connector.
+
+    Triggered by `agent.action="schedule"`. This isn't model-driven (see
+    `_web_fetch`'s docstring on why: streaming tool-call events currently
+    crash the runtime), so it's a direct connector call instead of something
+    the model decides to do.
+    """
+    start_at = _next_daily_run_at(
+        hour=int(context.run_config.get("agent.schedule_hour", 16)),
+        minute=0,
+        tz=context.run_config.get("agent.timezone", "Europe/Berlin"),
+    )
+    result = agent.connectors.call(
+        {
+            "name": "start_automation",
+            "call_id": "daily-irrigation-schedule",
+            "arguments": {
+                "input": "Should I water today?",
+                "start_at": start_at,
+                "fixed_interval": 86400,
+            },
+        }
+    )
+    print(f"Daily watering check scheduled starting {start_at}: {result}")
+
+
+def _maybe_schedule_from_question(
+    agent: AgentSession, client: OpenAI, question: str, default_start_at: str
+) -> dict | None:
+    """Let the model decide, from the farmer's own words, whether to schedule
+    a recurring daily check — and if so, register it for real.
+
+    Uses a single non-streaming tool-call turn rather than the app's usual
+    streamed calls: per `_web_fetch`'s docstring, streaming tool-call *events*
+    are what crashes the Flower runtime server-side, so this sidesteps that
+    by never streaming a turn where a tool call is on the table.
+    """
+    tools = agent.connectors.tools(["start_automation"])
+    allowed_tool_names = {tool["name"] for tool in tools if isinstance(tool.get("name"), str)}
+    if "start_automation" not in allowed_tool_names:
+        return None
+
+    response = client.responses.create(
+        model=MODEL,
+        input=[
+            {
+                "role": "system",
+                "content": (
+                    "If, and only if, the farmer is explicitly asking to set "
+                    "up a recurring/automated watering check (e.g. 'do this "
+                    "every day at 4pm'), call start_automation with "
+                    'input="Should I water today?", fixed_interval=86400 '
+                    f"for daily recurrence, and start_at={default_start_at!r} "
+                    "unless the farmer clearly asked for a different time (in "
+                    "which case compute the next matching ISO 8601 timestamp "
+                    "with a timezone offset). Otherwise, do not call any tool "
+                    "— most questions are not scheduling requests."
+                ),
+            },
+            {"role": "user", "content": question},
+        ],
+        tools=tools,
+        tool_choice="auto",
+        stream=False,
+    )
+    for item in response.output:
+        if getattr(item, "type", None) == "function_call" and item.name == "start_automation":
+            if item.name not in allowed_tool_names:
+                raise RuntimeError(f"Tool {item.name!r} was not exposed")
+            arguments = json.loads(item.arguments)
+            result = agent.connectors.call(
+                {
+                    "name": "start_automation",
+                    "call_id": item.call_id,
+                    "arguments": arguments,
+                }
+            )
+            print(f"Automation scheduled via chat request: {arguments} -> {result}")
+            return arguments
+    return None
+
+
 def _web_fetch(agent: AgentSession, call_id: str, url: str) -> str:
     """Fetch a URL through the platform's web_fetch connector.
 
@@ -86,7 +180,11 @@ def _web_fetch(agent: AgentSession, call_id: str, url: str) -> str:
 
 @app.main()
 def main(agent: AgentSession, context: Context) -> None:
-    """Answer one irrigation question for one field."""
+    """Answer one watering question for one field, or set up a daily check."""
+    if context.run_config.get("agent.action") == "schedule":
+        _setup_daily_automation(agent, context)
+        return
+
     question = context.run_config.get("agent.input")
     if not isinstance(question, str) or not question.strip():
         raise ValueError("agent.input must be a non-empty string")
@@ -142,6 +240,21 @@ def main(agent: AgentSession, context: Context) -> None:
         api_key=os.environ["FLWR_RUNTIME_API_KEY"],
         max_retries=0,
     )
+
+    # If the farmer asked for a recurring check in their own words, register it.
+    # Wrapped because a scheduling failure must not cost them today's answer.
+    try:
+        _maybe_schedule_from_question(
+            agent, client, question,
+            _next_daily_run_at(
+                hour=int(context.run_config.get("agent.schedule_hour", 16)),
+                minute=0,
+                tz=str(context.run_config.get("agent.timezone", "Europe/Berlin")),
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001 - degrade gracefully, don't crash the run
+        print(f"automation scheduling check failed: {exc!r}")
+
     stream = client.responses.create(
         model=MODEL,
         input=[

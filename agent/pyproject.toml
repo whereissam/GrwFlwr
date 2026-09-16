@@ -3,26 +3,33 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "agent"
+name = "GrwFlwr"
 version = "0.2.0"
-description = "A minimal Flower AgentApp"
+description = "An agentic Flower app that advises farmers on watering decisions using live weather, a federated-learning model, and local farm data."
 license = { file = "LICENSE" }
 requires-python = ">=3.11,<4.0"
-dependencies = ["flwr>=1.35.0,<2.0", "openai>=2.16.0,<3.0.0"]
+dependencies = ["flwr>=1.35.0,<2.0", "openai>=2.16.0,<3.0.0", "tzdata>=2025.2"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["agent"]
 
 [tool.flwr.app]
-publisher = "flwrlabs"
+publisher = "julianp"
+display-name = "GrwFlwr"
 fab-format-version = 1
 flwr-version-target = "1.35.0"
-fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE"]
+fab-include = ["agent/**/*.py", "agent/**/*.json", "LICENSE", "README.md"]
 
 [tool.flwr.app.config.agent]
-input = "Should I irrigate today?"
+input = "Should I water today?"
+# Farms are partitions of the federated dataset; coordinates live per farm in
+# agent_app.FARM_LOCATION, so latitude/longitude are no longer run config.
 farm_id = "farmer_1"
 field_id = ""
+# Scheduling (Julian): action="schedule" registers a daily recurring run.
+action = ""
+schedule_hour = 16
+timezone = "Europe/Berlin"
 
 [tool.flwr.app.components]
 agentapp = "agent.agent_app:app"

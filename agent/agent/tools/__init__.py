@@ -1,4 +1,4 @@
-"""Data sources the irrigation agent uses: weather, local farm data, FL model."""
+"""Data sources the watering agent uses: weather, local farm data, FL model."""
 
 from .fl_model import (
     ModelUnavailable,
