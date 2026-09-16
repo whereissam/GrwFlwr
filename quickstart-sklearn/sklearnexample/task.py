@@ -35,6 +35,7 @@ def prepare_data(csv_filepath, partition_id, target_column="Water_Demand_Liters"
     return X_train_scaled, X_test_scaled, y_train, y_test, scaler
 
 
+
 def train_model(X_train, y_train, scaler=None, model_path="model.joblib", scaler_path="scaler.joblib"):
    
     model = LinearRegression()

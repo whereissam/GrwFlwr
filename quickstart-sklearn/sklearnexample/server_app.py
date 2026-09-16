@@ -1,15 +1,12 @@
 """sklearnexample: A Flower / sklearn app."""
-
 import joblib
+import numpy as np
+from sklearn.linear_model import LinearRegression
+
 from flwr.app import ArrayRecord, Context
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
 
-from sklearnexample.task import (
-    create_log_reg_and_instantiate_parameters,
-    get_model_params,
-    set_model_params,
-)
 
 # Create ServerApp
 app = ServerApp()
@@ -19,14 +16,17 @@ app = ServerApp()
 def main(grid: Grid, context: Context) -> None:
     """Main entry point for the ServerApp."""
 
-    # Read run config
+    # Read Parameters
     num_rounds: int = context.run_config["num-server-rounds"]
 
-    # Create LogisticRegression Model
-    penalty = context.run_config["penalty"]
-    model = create_log_reg_and_instantiate_parameters(penalty)
-    # Construct ArrayRecord representation
-    arrays = ArrayRecord(get_model_params(model))
+    # Create and parameters
+    model = LinearRegression()
+    model.fit([[0, 0, 0, 0]], [0])
+
+    arrays = ArrayRecord([
+        model.coef_, 
+        np.array([model.intercept_])
+    ])
 
     # Initialize FedAvg strategy
     strategy = FedAvg(fraction_train=1.0, fraction_evaluate=1.0)
@@ -39,8 +39,11 @@ def main(grid: Grid, context: Context) -> None:
     )
 
     if context.run_config["save-model"]:
-        # Save final model parameters
+
         print("\nSaving final model to disk...")
         ndarrays = result.arrays.to_numpy_ndarrays()
-        set_model_params(model, ndarrays)
-        joblib.dump(model, "logreg_model.pkl")
+        
+        model.coef_ = ndarrays[0]
+        model.intercept_ = ndarrays[1][0]
+        
+        joblib.dump(model, "model.joblib")
