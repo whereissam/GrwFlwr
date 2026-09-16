@@ -1,0 +1,57 @@
+flowchart TD
+    subgraph FARMS[Farms - raw telemetry never leaves the site]
+        F1[(Farm 1 soil + usage)]
+        F2[(Farm 2 soil + usage)]
+        F3[(Farm 3 soil + usage)]
+        F4[(Farm 4 soil + usage)]
+    end
+
+    subgraph EDGE[Flower ClientApp - one per farm]
+        C1[Train irrigation-safety model locally]
+    end
+
+    WIRE[[Only model weights cross the wire]]
+
+    subgraph AUTH[Regional Authority]
+        SRV[Flower ServerApp - FedAvg]
+        GM{{Global irrigation-safety model}}
+    end
+
+    subgraph AGENT[GrowFlwr AgentApp]
+        WX[Tool: live weather forecast]
+        LOC[Tool: this farm's readings]
+        PRED[Tool: predict irrigation safety]
+        AG[Flower Agent - LLM reasoning loop]
+    end
+
+    subgraph USER[Farmer]
+        Q([Can I irrigate safely?])
+        ANS([Recommendation + water budget])
+    end
+
+    F1 --> C1
+    F2 --> C1
+    F3 --> C1
+    F4 --> C1
+
+    C1 --> WIRE --> SRV --> GM
+    GM --> C1
+
+    GM --> PRED
+    Q --> AG
+    WX --> AG
+    LOC --> AG
+    PRED --> AG
+    AG --> ANS
+
+    classDef farm fill:#16362a,stroke:#4ade80,color:#d1fae5
+    classDef wire fill:#3f1d2e,stroke:#fb7185,color:#ffe4e6
+    classDef authority fill:#1b2a52,stroke:#60a5fa,color:#dbeafe
+    classDef agent fill:#3d2a14,stroke:#fbbf24,color:#fef3c7
+    classDef person fill:#2f1c3f,stroke:#c084fc,color:#f3e8ff
+
+    class F1,F2,F3,F4,C1 farm
+    class WIRE wire
+    class SRV,GM authority
+    class AG,WX,LOC,PRED agent
+    class Q,ANS person

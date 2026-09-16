@@ -1,54 +1,125 @@
-"""Client for the team's federated-learning irrigation model.
+"""The team's federated-learning irrigation model.
 
-TODO(fl-team): set FL_MODEL_URL to the real SuperGrid inference endpoint once
-the federated model is deployed. Until then this falls back to a simple
-heuristic so the agent can be demoed end-to-end without the model.
+Replaces the earlier heuristic placeholder. The model is produced by
+`federated/` (FedAvg across four farms) and ships inside the FAB as JSON: the
+AgentApp runs in a remote container with no route to the laptop that trained it.
 
-The endpoint must accept a GET request with query parameters and return a
-JSON object: direct outbound HTTP from AgentApp code is blocked by the
-SuperGrid run sandbox's egress policy, so predictions are fetched through the
-platform's `web_fetch` connector, which only supports GET-style fetches (no
-arbitrary POST bodies).
+Scoring happens in-process. There is no inference endpoint to call, so none of
+the egress restrictions apply here, and a farmer's readings never leave the app.
 """
 
 import json
-import os
-from urllib.parse import urlencode
+import math
+from pathlib import Path
 
-FL_MODEL_URL = os.environ.get("FL_MODEL_URL")
-
-
-def build_fl_model_url(
-    farm_id: str,
-    soil_moisture_pct: float | None = None,
-    forecast_precipitation_mm: float | None = None,
-) -> str | None:
-    """Build the FL model's prediction URL, or None if FL_MODEL_URL is unset."""
-    if not FL_MODEL_URL:
-        return None
-    params: dict[str, str] = {"farm_id": farm_id}
-    if soil_moisture_pct is not None:
-        params["soil_moisture_pct"] = str(soil_moisture_pct)
-    if forecast_precipitation_mm is not None:
-        params["forecast_precipitation_mm"] = str(forecast_precipitation_mm)
-    return f"{FL_MODEL_URL}?{urlencode(params)}"
+_DATA = Path(__file__).resolve().parent.parent / "data"
 
 
-def parse_fl_model_response(response_text: str) -> dict:
-    """Parse the FL model's raw JSON response."""
-    return json.loads(response_text)
+class ModelUnavailable(RuntimeError):
+    """The model artifacts are not bundled in this build."""
 
 
-def heuristic_irrigation_prediction(
-    soil_moisture_pct: float | None = None,
-    forecast_precipitation_mm: float | None = None,
-) -> dict:
-    """Fallback prediction used until the real FL model is reachable."""
-    moisture = 20.0 if soil_moisture_pct is None else soil_moisture_pct
-    rain = 0.0 if forecast_precipitation_mm is None else forecast_precipitation_mm
-    score = max(0.0, min(1.0, (30.0 - moisture) / 30.0 - rain / 50.0))
+def _load(name: str) -> dict:
+    path = _DATA / name
+    if not path.exists():
+        raise ModelUnavailable(
+            f"{name} missing. Run the federated training in ../federated, then "
+            f"./scripts/sync-model.sh, before building the FAB."
+        )
+    return json.loads(path.read_text())
+
+
+def _score(weights: list[float], bias: float, stats: dict, features: list[str],
+           readings: dict[str, float]) -> tuple[float, dict[str, float]]:
+    """Return (probability, per-feature contribution) for one set of readings."""
+    missing = [f for f in features if f not in readings]
+    if missing:
+        raise ModelUnavailable(f"Readings missing required fields: {missing}")
+
+    logit = float(bias)
+    contributions = {}
+    for name, weight in zip(features, weights):
+        mean, std = stats[name]
+        term = weight * ((float(readings[name]) - mean) / std)
+        contributions[name] = round(term, 3)
+        logit += term
+    return 1.0 / (1.0 + math.exp(-logit)), contributions
+
+
+def predict_irrigation_safety(readings: dict[str, float]) -> dict:
+    """Score readings with the federated global model."""
+    model = _load("global_model.json")
+    probability, contributions = _score(
+        model["weights"], model["bias"], model["feature_stats"],
+        model["features"], readings,
+    )
+    ranked = sorted(contributions.items(), key=lambda kv: abs(kv[1]), reverse=True)
+
     return {
-        "source": "heuristic-fallback (FL_MODEL_URL not set)",
-        "irrigation_need_score": round(score, 2),
-        "recommended_irrigation_mm": round(score * 15, 1),
+        "source": f"federated model, FedAvg over {model['num_farms']} farms",
+        "decision": "safe to irrigate" if probability >= 0.5 else "do not irrigate",
+        "confidence_pct": f"{probability:.0%}",
+        "probability_safe": round(probability, 3),
+        "region_accuracy_pct": f"{model['region_accuracy']:.1%}",
+        "top_drivers": [
+            {
+                "feature": name,
+                "reading": readings[name],
+                "effect": "supports irrigating" if term > 0 else "argues against",
+            }
+            for name, term in ranked[:3]
+        ],
+    }
+
+
+def compare_against_solo(farm_id: str, readings: dict[str, float]) -> dict:
+    """Score the same readings with this farm's go-it-alone model.
+
+    The counterfactual: what this farmer would have been told if the region had
+    never federated. Identical inputs, so any difference is down to whose data
+    trained the model.
+    """
+    solo_file = _load("solo_models.json")
+    index = str(int(farm_id.split("-")[-1]) - 1)
+    if index not in solo_file["models"]:
+        raise ModelUnavailable(f"No solo model for {farm_id}.")
+
+    solo = solo_file["models"][index]
+    probability, _ = _score(
+        solo["weights"], solo["bias"], solo_file["feature_stats"],
+        solo_file["features"], readings,
+    )
+    decision = "safe to irrigate" if probability >= 0.5 else "do not irrigate"
+    federated = predict_irrigation_safety(readings)
+
+    return {
+        "this_farm_alone": {
+            "decision": decision,
+            "confidence_pct": f"{probability:.0%}",
+            "region_accuracy_pct": f"{solo['region_accuracy']:.1%}",
+        },
+        "federated": {
+            "decision": federated["decision"],
+            "confidence_pct": federated["confidence_pct"],
+            "region_accuracy_pct": federated["region_accuracy_pct"],
+        },
+        "models_disagree": decision != federated["decision"],
+    }
+
+
+def water_budget(readings: dict[str, float], horizon_days: float = 2.0) -> dict:
+    """Litres per hectare needed over the horizon, after forecast rain.
+
+    Crop water use is reference evapotranspiration scaled by the crop
+    coefficient; rain already forecast is subtracted, because irrigating on top
+    of it is the waste this system exists to prevent.
+    """
+    demand_mm = readings["et0_mm_day"] * readings["crop_coefficient"] * horizon_days
+    deficit_mm = max(0.0, demand_mm - readings["rain_forecast_48h_mm"])
+    return {
+        "horizon_days": horizon_days,
+        "crop_demand_mm": round(demand_mm, 1),
+        "rain_expected_mm": round(readings["rain_forecast_48h_mm"], 1),
+        "net_deficit_mm": round(deficit_mm, 1),
+        "litres_per_hectare": round(deficit_mm * 10_000),
     }

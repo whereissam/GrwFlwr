@@ -1,14 +1,22 @@
 """Data sources the irrigation agent uses: weather, local farm data, FL model."""
 
-from .fl_model import build_fl_model_url, heuristic_irrigation_prediction, parse_fl_model_response
-from .local_data import get_local_farm_data
+from .fl_model import (
+    ModelUnavailable,
+    compare_against_solo,
+    predict_irrigation_safety,
+    water_budget,
+)
+from .local_data import build_model_readings, get_local_farm_data, list_farms
 from .weather import build_weather_forecast_url, parse_weather_forecast
 
 __all__ = [
-    "build_fl_model_url",
+    "ModelUnavailable",
+    "build_model_readings",
     "build_weather_forecast_url",
+    "compare_against_solo",
     "get_local_farm_data",
-    "heuristic_irrigation_prediction",
-    "parse_fl_model_response",
+    "list_farms",
     "parse_weather_forecast",
+    "predict_irrigation_safety",
+    "water_budget",
 ]

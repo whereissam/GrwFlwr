@@ -1,0 +1,55 @@
+{
+  "features": [
+    "soil_moisture_pct",
+    "rain_forecast_48h_mm",
+    "et0_mm_day",
+    "temp_c",
+    "crop_coefficient",
+    "days_since_irrigation",
+    "allocation_headroom_pct"
+  ],
+  "feature_stats": {
+    "soil_moisture_pct": [
+      28.0,
+      9.0
+    ],
+    "rain_forecast_48h_mm": [
+      6.0,
+      6.5
+    ],
+    "et0_mm_day": [
+      4.2,
+      1.6
+    ],
+    "temp_c": [
+      24.0,
+      6.0
+    ],
+    "crop_coefficient": [
+      0.85,
+      0.22
+    ],
+    "days_since_irrigation": [
+      5.0,
+      3.2
+    ],
+    "allocation_headroom_pct": [
+      45.0,
+      22.0
+    ]
+  },
+  "weights": [
+    -1.6897358632263613,
+    -1.3769518126786868,
+    1.2222137701816163,
+    0.836912037003498,
+    0.9681726934281238,
+    1.088963647637128,
+    1.3865954452419946
+  ],
+  "bias": -0.10195483989617672,
+  "region_accuracy": 0.9745,
+  "mean_solo_accuracy": 0.94825,
+  "rounds": 8,
+  "num_farms": 4
+}

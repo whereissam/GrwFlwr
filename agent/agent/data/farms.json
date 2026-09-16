@@ -1,10 +1,126 @@
 {
   "farm-001": {
-    "name": "Demo Farm",
+    "name": "Farm 1 - sandy upland, canal head",
     "crop": "maize",
+    "soil_type": "sandy",
+    "latitude": 41.62,
+    "longitude": 0.62,
+    "irrigation_system": "drip",
+    "farm_measured": {
+      "soil_moisture_pct": 27.86,
+      "crop_coefficient": 0.736,
+      "days_since_irrigation": 9.72,
+      "allocation_headroom_pct": 55.7
+    },
+    "weather_fallback": {
+      "rain_forecast_48h_mm": 2.13,
+      "et0_mm_day": 5.48,
+      "temp_c": 32.4
+    },
+    "unusual_conditions": {
+      "readings": {
+        "soil_moisture_pct": 40.46,
+        "rain_forecast_48h_mm": 12.19,
+        "et0_mm_day": 4.15,
+        "temp_c": 27.13,
+        "crop_coefficient": 0.648,
+        "days_since_irrigation": 2.02,
+        "allocation_headroom_pct": 100.0
+      },
+      "ground_truth": "do not irrigate"
+    }
+  },
+  "farm-002": {
+    "name": "Farm 2 - clay lowland, canal head",
+    "crop": "rice",
+    "soil_type": "clay",
+    "latitude": 41.6,
+    "longitude": 0.7,
+    "irrigation_system": "flood",
+    "farm_measured": {
+      "soil_moisture_pct": 37.85,
+      "crop_coefficient": 0.872,
+      "days_since_irrigation": 2.01,
+      "allocation_headroom_pct": 68.3
+    },
+    "weather_fallback": {
+      "rain_forecast_48h_mm": 7.18,
+      "et0_mm_day": 2.84,
+      "temp_c": 24.62
+    },
+    "unusual_conditions": {
+      "readings": {
+        "soil_moisture_pct": 31.82,
+        "rain_forecast_48h_mm": 11.23,
+        "et0_mm_day": 1.64,
+        "temp_c": 20.15,
+        "crop_coefficient": 0.741,
+        "days_since_irrigation": 11.61,
+        "allocation_headroom_pct": 90.6
+      },
+      "ground_truth": "safe to irrigate"
+    }
+  },
+  "farm-003": {
+    "name": "Farm 3 - loam midslope, canal tail",
+    "crop": "alfalfa",
     "soil_type": "loam",
-    "soil_moisture_pct": 18.5,
-    "last_irrigation": "2026-09-14",
-    "irrigation_system": "drip"
+    "latitude": 41.47,
+    "longitude": 0.86,
+    "irrigation_system": "drip",
+    "farm_measured": {
+      "soil_moisture_pct": 13.62,
+      "crop_coefficient": 1.092,
+      "days_since_irrigation": 10.29,
+      "allocation_headroom_pct": 57.0
+    },
+    "weather_fallback": {
+      "rain_forecast_48h_mm": 6.56,
+      "et0_mm_day": 6.69,
+      "temp_c": 28.2
+    },
+    "unusual_conditions": {
+      "readings": {
+        "soil_moisture_pct": 32.58,
+        "rain_forecast_48h_mm": 15.6,
+        "et0_mm_day": 2.19,
+        "temp_c": 16.47,
+        "crop_coefficient": 1.273,
+        "days_since_irrigation": 6.38,
+        "allocation_headroom_pct": 80.3
+      },
+      "ground_truth": "do not irrigate"
+    }
+  },
+  "farm-004": {
+    "name": "Farm 4 - terraced orchard, canal tail",
+    "crop": "peach orchard",
+    "soil_type": "terraced loam",
+    "latitude": 41.41,
+    "longitude": 0.95,
+    "irrigation_system": "drip",
+    "farm_measured": {
+      "soil_moisture_pct": 37.01,
+      "crop_coefficient": 0.631,
+      "days_since_irrigation": 6.24,
+      "allocation_headroom_pct": 39.1
+    },
+    "weather_fallback": {
+      "rain_forecast_48h_mm": 7.32,
+      "et0_mm_day": 3.25,
+      "temp_c": 22.26
+    },
+    "unusual_conditions": {
+      "readings": {
+        "soil_moisture_pct": 25.88,
+        "rain_forecast_48h_mm": 4.49,
+        "et0_mm_day": 4.06,
+        "temp_c": 38.65,
+        "crop_coefficient": 1.086,
+        "days_since_irrigation": 8.0,
+        "allocation_headroom_pct": 0.0
+      },
+      "ground_truth": "safe to irrigate"
+    }
   }
 }
