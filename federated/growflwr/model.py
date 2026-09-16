@@ -1,37 +1,51 @@
-"""Logistic regression on plain NumPy.
+"""Multinomial logistic regression on plain NumPy.
 
-Deliberately not scikit-learn or torch: the model has to train in well under a
-second so a federated round is instant on stage, and the weights have to be two
-small arrays that are obvious to serialize and easy to show as "this is all that
-crosses the wire".
+Three classes (Low / Medium / High irrigation need), trained by full-batch
+gradient descent so a federated round finishes instantly on stage. The whole
+model is a 23x3 weight matrix and three biases -- small enough to print, which
+makes "this is all that crosses the wire" a claim the audience can check.
+
+Class weighting matters here. High is about 2% of rows, so an unweighted fit
+learns to never predict it. Weights are inverse-frequency, computed per client
+from its own label counts.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
-from .data import N_FEATURES
+from .data import NUM_CLASSES, N_FEATURES
 
 
 def init_params() -> list[np.ndarray]:
-    """Return zeroed [weights, bias]. Zeros keep every run reproducible."""
-    return [np.zeros(N_FEATURES, dtype=np.float64), np.zeros(1, dtype=np.float64)]
+    """Zeroed [weights, bias]. Zeros keep every run reproducible."""
+    return [
+        np.zeros((N_FEATURES, NUM_CLASSES), dtype=np.float64),
+        np.zeros(NUM_CLASSES, dtype=np.float64),
+    ]
 
 
-def _sigmoid(z: np.ndarray) -> np.ndarray:
-    # Branch on sign so exp() never overflows on large-magnitude logits.
-    out = np.empty_like(z)
-    pos = z >= 0
-    out[pos] = 1.0 / (1.0 + np.exp(-z[pos]))
-    exp_z = np.exp(z[~pos])
-    out[~pos] = exp_z / (1.0 + exp_z)
-    return out
+def _softmax(z: np.ndarray) -> np.ndarray:
+    z = z - z.max(axis=1, keepdims=True)  # shift for numerical stability
+    e = np.exp(z)
+    return e / e.sum(axis=1, keepdims=True)
 
 
 def predict_proba(params: list[np.ndarray], x: np.ndarray) -> np.ndarray:
-    """Probability that irrigating now is safe."""
     w, b = params
-    return _sigmoid(x @ w + b[0])
+    return _softmax(x @ w + b)
+
+
+def predict(params: list[np.ndarray], x: np.ndarray) -> np.ndarray:
+    return predict_proba(params, x).argmax(axis=1)
+
+
+def class_weights(y: np.ndarray) -> np.ndarray:
+    """Inverse-frequency weights so the rare High class is not ignored."""
+    counts = np.bincount(y, minlength=NUM_CLASSES).astype(np.float64)
+    counts[counts == 0] = 1.0  # a class this farm never saw contributes nothing
+    weights = len(y) / (NUM_CLASSES * counts)
+    return weights
 
 
 def train(
@@ -41,26 +55,56 @@ def train(
     epochs: int,
     lr: float,
 ) -> tuple[list[np.ndarray], float]:
-    """Full-batch gradient descent. Returns (new params, final loss)."""
+    """Full-batch weighted gradient descent. Returns (new params, final loss)."""
     w, b = (p.copy() for p in params)
     n = max(1, len(x))
-    loss = 0.0
 
+    onehot = np.zeros((len(y), NUM_CLASSES))
+    onehot[np.arange(len(y)), y] = 1.0
+    sample_w = class_weights(y)[y][:, None]
+
+    loss = 0.0
     for _ in range(epochs):
-        p = _sigmoid(x @ w + b[0])
-        error = p - y
+        p = _softmax(x @ w + b)
+        error = (p - onehot) * sample_w
         w -= lr * (x.T @ error) / n
-        b -= lr * error.mean()
-        loss = log_loss(y, p)
+        b -= lr * error.mean(axis=0)
+        loss = cross_entropy(y, p)
 
     return [w, b], loss
 
 
-def log_loss(y: np.ndarray, p: np.ndarray) -> float:
+def cross_entropy(y: np.ndarray, p: np.ndarray) -> float:
     eps = 1e-9
-    p = np.clip(p, eps, 1.0 - eps)
-    return float(-np.mean(y * np.log(p) + (1.0 - y) * np.log(1.0 - p)))
+    return float(-np.mean(np.log(np.clip(p[np.arange(len(y)), y], eps, 1.0))))
 
 
 def accuracy(params: list[np.ndarray], x: np.ndarray, y: np.ndarray) -> float:
-    return float(((predict_proba(params, x) >= 0.5).astype(np.float64) == y).mean())
+    """Reported for completeness only -- always predicting Low scores ~75%."""
+    return float((predict(params, x) == y).mean())
+
+
+def per_class_recall(params: list[np.ndarray], x: np.ndarray, y: np.ndarray) -> list[float]:
+    """Fraction of each true class the model actually catches."""
+    pred = predict(params, x)
+    out = []
+    for c in range(NUM_CLASSES):
+        mask = y == c
+        out.append(float((pred[mask] == c).mean()) if mask.any() else float("nan"))
+    return out
+
+
+def macro_f1(params: list[np.ndarray], x: np.ndarray, y: np.ndarray) -> float:
+    """Unweighted mean F1 across classes: rare classes count as much as common."""
+    pred = predict(params, x)
+    scores = []
+    for c in range(NUM_CLASSES):
+        tp = float(((pred == c) & (y == c)).sum())
+        fp = float(((pred == c) & (y != c)).sum())
+        fn = float(((pred != c) & (y == c)).sum())
+        if tp == 0.0:
+            scores.append(0.0)
+            continue
+        precision, recall = tp / (tp + fp), tp / (tp + fn)
+        scores.append(2 * precision * recall / (precision + recall))
+    return float(np.mean(scores))

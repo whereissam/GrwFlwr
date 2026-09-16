@@ -25,6 +25,7 @@ from .tools import (
     get_local_farm_data,
     parse_weather_forecast,
     predict_irrigation_safety,
+    recommendation,
     water_budget,
 )
 
@@ -39,8 +40,10 @@ farm in the region, and a water budget. Those numbers are already computed and
 are the only quantitative facts you may state.
 
 Rules:
-- Lead with the decision and the confidence, in one sentence a busy farmer can
-  act on.
+- Lead with `recommendation.action` and the confidence, in one sentence a busy
+  farmer can act on. `recommendation` already reconciles "is it safe" with "is it
+  needed" -- never advise irrigating when it says there is no need, even if the
+  safety probability is above 50%.
 - Justify it from the drivers given, naming the actual readings.
 - State the water budget in litres per hectare.
 - Use the pre-formatted percentage strings exactly as given.
@@ -115,8 +118,10 @@ def main(agent: AgentSession, context: Context) -> None:
     prediction = _safe_call("FL model", lambda: predict_irrigation_safety(readings))
     counterfactual = _safe_call("solo comparison", lambda: compare_against_solo(farm_id, readings))
     budget = _safe_call("water budget", lambda: water_budget(readings))
+    advice = recommendation(prediction, budget)
 
-    _print_header(farm, scenario, weather_source, counterfactual, known_answer, question)
+    _print_header(farm, scenario, weather_source, counterfactual, known_answer,
+                  question, advice)
 
     data = {
         "farm": {k: farm[k] for k in ("name", "crop", "soil_type", "irrigation_system")},
@@ -127,6 +132,7 @@ def main(agent: AgentSession, context: Context) -> None:
         "fl_model_prediction": prediction,
         "counterfactual": counterfactual,
         "water_budget": budget,
+        "recommendation": advice,
     }
     if known_answer:
         data["known_correct_answer"] = known_answer
@@ -157,7 +163,8 @@ def main(agent: AgentSession, context: Context) -> None:
     print("".join(output_text))
 
 
-def _print_header(farm, scenario, weather_source, counterfactual, known_answer, question):
+def _print_header(farm, scenario, weather_source, counterfactual, known_answer,
+                  question, advice=None):
     """Show the decision both ways before the model speaks, for the operator."""
     print(f"--- {farm['name']}  [{scenario}] ---")
     print(f"weather: {weather_source}")

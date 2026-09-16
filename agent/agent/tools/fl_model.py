@@ -123,3 +123,40 @@ def water_budget(readings: dict[str, float], horizon_days: float = 2.0) -> dict:
         "net_deficit_mm": round(deficit_mm, 1),
         "litres_per_hectare": round(deficit_mm * 10_000),
     }
+
+
+def recommendation(prediction: dict, budget: dict) -> dict:
+    """Reconcile "is it safe" with "is it needed" into one instruction.
+
+    These are different questions and they can disagree: the model can rate
+    irrigating safe while the forecast rain already covers crop demand, which
+    would otherwise produce the useless advice "irrigate, 0 litres". Need is
+    checked first, because water not needed is water not spent.
+    """
+    if "error" in prediction or "error" in budget:
+        return {"action": "unavailable",
+                "reason": "a required figure could not be computed"}
+
+    if budget["net_deficit_mm"] <= 0.0:
+        return {
+            "action": "no need to irrigate",
+            "reason": (f"forecast rain of {budget['rain_expected_mm']} mm already "
+                       f"covers crop demand of {budget['crop_demand_mm']} mm"),
+            "litres_per_hectare": 0,
+        }
+
+    if prediction["probability_safe"] < 0.5:
+        return {
+            "action": "do not irrigate",
+            "reason": (f"the federated model rates irrigating safe at only "
+                       f"{prediction['confidence_pct']}"),
+            "litres_per_hectare": 0,
+        }
+
+    return {
+        "action": "irrigate",
+        "reason": (f"crop demand exceeds forecast rain by "
+                   f"{budget['net_deficit_mm']} mm and the federated model rates "
+                   f"this safe at {prediction['confidence_pct']}"),
+        "litres_per_hectare": budget["litres_per_hectare"],
+    }

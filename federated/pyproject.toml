@@ -17,16 +17,16 @@ packages = ["growflwr"]
 publisher = "growflwr"
 fab-format-version = 1
 flwr-version-target = "1.35.0"
-fab-include = ["growflwr/**/*.py", "LICENSE"]
+fab-include = ["growflwr/**/*.py", "growflwr/dataset/*", "LICENSE"]
 
 [tool.flwr.app.components]
 serverapp = "growflwr.server_app:app"
 clientapp = "growflwr.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 8
+num-server-rounds = 10
 local-epochs = 40
-learning-rate = 0.15
+learning-rate = 0.3
 
 
 #######################################################################

@@ -1,7 +1,7 @@
-"""Flower ClientApp: trains the irrigation-safety model on one farm's data.
+"""Flower ClientApp: trains the irrigation-need model on one farm's rows.
 
-Raw telemetry is read here and nowhere else. What leaves this process is the
-weight vector and a row count -- see `server_app.py` for the audit that proves it.
+The farm's CSV is read here and nowhere else. What leaves this process is a
+23x3 weight matrix, three biases, and a row count.
 """
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ import numpy as np
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from .data import farm_data
-from .model import accuracy, log_loss, predict_proba, train
+from .data import NUM_CLASSES, farm_data
+from .model import cross_entropy, macro_f1, per_class_recall, predict_proba, train
 
 app = ClientApp()
 
@@ -27,39 +27,44 @@ def _load_params(message: Message) -> list[np.ndarray]:
 
 @app.train()
 def train_fn(message: Message, context: Context) -> Message:
-    """Take the global model, improve it on local rows, return weights only."""
+    """Improve the global model on local rows, return weights only."""
     params = _load_params(message)
     cfg = message.content["config"]
-    epochs = int(cfg["local-epochs"])
-    lr = float(cfg["learning-rate"])
 
     x_train, y_train, _, _ = farm_data(_partition(context))
-    params, loss = train(params, x_train, y_train, epochs, lr)
+    params, loss = train(params, x_train, y_train,
+                         int(cfg["local-epochs"]), float(cfg["learning-rate"]))
 
-    metrics = MetricRecord(
-        {
-            "num-examples": len(x_train),
-            "train_loss": loss,
-            "train_accuracy": accuracy(params, x_train, y_train),
-        }
-    )
+    counts = np.bincount(y_train, minlength=NUM_CLASSES)
     return Message(
-        RecordDict({"arrays": ArrayRecord(params), "metrics": metrics}),
+        RecordDict({
+            "arrays": ArrayRecord(params),
+            "metrics": MetricRecord({
+                "num-examples": len(x_train),
+                "train_loss": loss,
+                "train_macro_f1": macro_f1(params, x_train, y_train),
+                # Reported so the server can show how few High rows any one
+                # farm actually holds -- the core argument for federating.
+                "high_examples": int(counts[2]),
+            }),
+        }),
         reply_to=message,
     )
 
 
 @app.evaluate()
 def evaluate_fn(message: Message, context: Context) -> Message:
-    """Score the incoming global model on this farm's held-out local rows."""
+    """Score the incoming global model on this farm's held-out field."""
     params = _load_params(message)
     _, _, x_test, y_test = farm_data(_partition(context))
+    recalls = per_class_recall(params, x_test, y_test)
 
-    metrics = MetricRecord(
-        {
+    return Message(
+        RecordDict({"metrics": MetricRecord({
             "num-examples": len(x_test),
-            "eval_loss": log_loss(y_test, predict_proba(params, x_test)),
-            "eval_accuracy": accuracy(params, x_test, y_test),
-        }
+            "eval_loss": cross_entropy(y_test, predict_proba(params, x_test)),
+            "eval_macro_f1": macro_f1(params, x_test, y_test),
+            "eval_high_recall": 0.0 if np.isnan(recalls[2]) else recalls[2],
+        })}),
+        reply_to=message,
     )
-    return Message(RecordDict({"metrics": metrics}), reply_to=message)

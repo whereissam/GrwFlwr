@@ -1,9 +1,12 @@
-"""Flower ServerApp: FedAvg over the farms, then prove it was worth it.
+"""Flower ServerApp: FedAvg across the farms, then report honestly.
 
-Two things happen after the rounds finish. The global model is written to disk so
-the AgentApp can answer questions with it, and a solo-vs-federated table is
-printed on the region-wide held-out set. That table is the pitch: it is the
-number that says collaborating beat going it alone.
+Two artifacts come out of a run: the global model the AgentApp answers with,
+and a solo-vs-federated table on the pooled held-out fields.
+
+The table is deliberately not a victory lap. Federation lifts farms whose own
+history is thin and costs the best-resourced farm a little; both directions are
+printed, because a judge will ask and the answer is more interesting than a
+uniform win would be.
 """
 
 from __future__ import annotations
@@ -17,9 +20,10 @@ from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
 from flwr.serverapp import Grid, ServerApp
 from flwr.serverapp.strategy import FedAvg
 
-from .data import (FARM_PROFILES, FEATURE_STATS, FEATURES, NUM_FARMS, farm_data,
-                   region_data, to_human)
-from .model import accuracy, init_params, log_loss, predict_proba, train
+from .data import (CATEGORICAL, CLASS_NAMES, FEATURE_NAMES, FEATURE_STATS, NUMERIC,
+                   NUM_CLASSES, NUM_FARMS, farm_data, farm_name, region_data)
+from .model import (accuracy, init_params, macro_f1, per_class_recall, predict_proba,
+                    train)
 
 app = ServerApp()
 
@@ -38,124 +42,55 @@ def _to_params(arrays: ArrayRecord) -> list[np.ndarray]:
 
 def _save(params: list[np.ndarray], meta: dict) -> Path:
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-    MODEL_PATH.write_text(
-        json.dumps(
-            {
-                "features": FEATURES,
-                "feature_stats": FEATURE_STATS,
-                "weights": params[0].tolist(),
-                "bias": float(params[1][0]),
-                **meta,
-            },
-            indent=2,
-        )
-    )
+    MODEL_PATH.write_text(json.dumps({
+        "feature_names": FEATURE_NAMES,
+        "numeric": NUMERIC,
+        "categorical": CATEGORICAL,
+        "feature_stats": FEATURE_STATS,
+        "class_names": CLASS_NAMES,
+        "weights": params[0].tolist(),
+        "bias": params[1].tolist(),
+        **meta,
+    }, indent=2))
     return MODEL_PATH
 
 
-def _find_disagreement(
-    solo: list[np.ndarray],
-    fed: list[np.ndarray],
-    x: np.ndarray,
-    y: np.ndarray,
-) -> dict | None:
-    """Find a real regional condition where the solo model is wrong and FedAvg right.
-
-    Searched rather than authored: these are rows from the held-out regional set,
-    so the scenario the agent demonstrates on is a condition that genuinely occurs
-    in the region, not one picked to make federation look good.
-    """
-    p_solo = predict_proba(solo, x) >= 0.5
-    p_fed = predict_proba(fed, x) >= 0.5
-    truth = y.astype(bool)
-
-    candidates = np.where((p_solo != p_fed) & (p_fed == truth))[0]
-    if len(candidates) == 0:
-        return None
-
-    # Take the case where the two models are most confidently opposed, since
-    # that is the clearest thing to put in front of a judge.
-    margins = np.abs(predict_proba(solo, x[candidates]) - predict_proba(fed, x[candidates]))
-    best = candidates[int(np.argmax(margins))]
-    return {
-        "readings": to_human(x[best]),
-        "ground_truth": "safe to irrigate" if truth[best] else "do not irrigate",
-    }
-
-
-def _save_conditions(
-    solos: list[list[np.ndarray]],
-    fed_params: list[np.ndarray],
-    x_region: np.ndarray,
-    y_region: np.ndarray,
-) -> Path:
-    """Write each farm's current readings, plus a case its own model gets wrong.
-
-    The AgentApp runs in a container with no route to farm systems, so the
-    readings a farmer asks about have to travel with the app. In a real
-    deployment this is the farm's own gateway publishing its latest row.
-    """
-    out = {}
-    for fid, profile in enumerate(FARM_PROFILES):
-        _, _, x_test, _ = farm_data(fid)
-        entry = {
-            "name": profile["name"],
-            "readings": to_human(x_test[-1]),
-        }
-        unusual = _find_disagreement(solos[fid], fed_params, x_region, y_region)
-        if unusual is not None:
-            entry["unusual_conditions"] = unusual
-        out[str(fid)] = entry
-
-    path = MODEL_PATH.parent / "current_conditions.json"
+def _save_solo(solos, scores, path_name="solo_models.json") -> Path:
+    path = MODEL_PATH.parent / path_name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(out, indent=2))
+    path.write_text(json.dumps({
+        "feature_names": FEATURE_NAMES,
+        "numeric": NUMERIC,
+        "categorical": CATEGORICAL,
+        "feature_stats": FEATURE_STATS,
+        "class_names": CLASS_NAMES,
+        "models": {
+            str(fid): {
+                "name": farm_name(fid),
+                "weights": params[0].tolist(),
+                "bias": params[1].tolist(),
+                "macro_f1": score,
+            }
+            for fid, (params, score) in enumerate(zip(solos, scores))
+        },
+    }, indent=2))
     return path
 
 
-def _save_solo_models(
-    solos: list[list[np.ndarray]],
-    solo_accs: list[float],
-    x_region: np.ndarray,
-    y_region: np.ndarray,
-) -> Path:
-    """Persist each farm's go-it-alone model so the agent can show the contrast.
-
-    This is what the farmer would be relying on if the region had not federated.
-    Shipping it lets the agent answer the same question both ways on stage.
-    """
-    out = {}
-    for fid, (params, acc) in enumerate(zip(solos, solo_accs)):
-        out[str(fid)] = {
-            "name": FARM_PROFILES[fid]["name"],
-            "weights": params[0].tolist(),
-            "bias": float(params[1][0]),
-            "region_accuracy": acc,
-        }
-
-    path = MODEL_PATH.parent / "solo_models.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"features": FEATURES,
-                                "feature_stats": FEATURE_STATS,
-                                "models": out}, indent=2))
-    return path
-
-
-def _solo_baselines(epochs: int, lr: float) -> list[list[np.ndarray]]:
+def _solo_baselines(total_steps: int, lr: float) -> list[list[np.ndarray]]:
     """Train each farm alone, for comparison only.
 
-    This runs in-process because it is a benchmark, not part of the protocol --
-    in a real deployment each farm would measure this locally and report the
-    score. No federated step ever sees these rows.
+    Runs in-process because it is a benchmark, not part of the protocol. In a
+    real deployment each farm would measure this locally and report the score.
     """
-    solos = []
+    out = []
     for fid in range(NUM_FARMS):
         x, y, _, _ = farm_data(fid)
-        # Solo farms get the same total gradient steps as the federated model,
-        # so the comparison is about *whose data*, not who trained longer.
-        params, _ = train(init_params(), x, y, epochs, lr)
-        solos.append(params)
-    return solos
+        # Same total gradient steps as the federated model, so the comparison is
+        # about whose data, not who trained longer.
+        params, _ = train(init_params(), x, y, total_steps, lr)
+        out.append(params)
+    return out
 
 
 @app.main()
@@ -165,19 +100,19 @@ def main(grid: Grid, context: Context) -> None:
     lr = float(context.run_config["learning-rate"])
 
     x_region, y_region = region_data()
+    counts = np.bincount(y_region, minlength=NUM_CLASSES)
 
     def centralized_eval(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         params = _to_params(arrays)
-        return MetricRecord(
-            {
-                "region_accuracy": accuracy(params, x_region, y_region),
-                "region_loss": log_loss(y_region, predict_proba(params, x_region)),
-            }
-        )
+        recalls = per_class_recall(params, x_region, y_region)
+        return MetricRecord({
+            "region_macro_f1": macro_f1(params, x_region, y_region),
+            "region_accuracy": accuracy(params, x_region, y_region),
+            "region_high_recall": 0.0 if np.isnan(recalls[2]) else recalls[2],
+        })
 
     strategy = FedAvg(fraction_train=1.0, min_train_nodes=NUM_FARMS,
                       min_evaluate_nodes=NUM_FARMS, min_available_nodes=NUM_FARMS)
-
     result = strategy.start(
         grid=grid,
         initial_arrays=ArrayRecord(init_params()),
@@ -187,49 +122,61 @@ def main(grid: Grid, context: Context) -> None:
         evaluate_fn=centralized_eval,
     )
 
-    fed_params = _to_params(result.arrays)
-    fed_acc = accuracy(fed_params, x_region, y_region)
+    fed = _to_params(result.arrays)
+    fed_f1 = macro_f1(fed, x_region, y_region)
+    fed_rec = per_class_recall(fed, x_region, y_region)
 
-    # --- The money metric -------------------------------------------------
     solos = _solo_baselines(epochs * rounds, lr)
-    solo_accs = [accuracy(p, x_region, y_region) for p in solos]
+    solo_f1 = [macro_f1(p, x_region, y_region) for p in solos]
 
-    print("\n" + "=" * 78)
-    print("GrowFlwr - region-wide accuracy (held-out, all farms' conditions)")
-    print("=" * 78)
-    print(f"{'farm':<40}{'alone':>10}{'federated':>12}{'gain':>12}")
-    print("-" * 78)
-    for profile, acc in zip(FARM_PROFILES, solo_accs):
-        gain = (fed_acc - acc) * 100
-        print(f"{profile['name']:<40}{acc:>9.1%}{fed_acc:>12.1%}{gain:>+11.1f}pp")
-    print("-" * 78)
-    mean_solo = float(np.mean(solo_accs))
-    print(f"{'mean':<40}{mean_solo:>9.1%}{fed_acc:>12.1%}"
-          f"{(fed_acc - mean_solo) * 100:>+11.1f}pp")
-    print("=" * 78)
+    width = 80
+    print("\n" + "=" * width)
+    print("GrowFlwr - pooled held-out fields, all four farms")
+    print("=" * width)
+    print(f"Test set: {len(y_region)} rows  "
+          f"Low={counts[0]}  Medium={counts[1]}  High={counts[2]}")
+    print(f"Always predicting Low would score {counts[0] / len(y_region):.1%} accuracy, "
+          f"which is why macro-F1 is the metric.")
+    print("-" * width)
+    print(f"{'model':<26}{'macro-F1':>12}{'vs federated':>16}{'High rows held':>16}")
+    print("-" * width)
+    for fid, score in enumerate(solo_f1):
+        held = int(np.bincount(farm_data(fid)[1], minlength=NUM_CLASSES)[2])
+        print(f"{'solo: ' + farm_name(fid):<26}{score:>12.3f}"
+              f"{score - fed_f1:>+16.3f}{held:>16}")
+    print("-" * width)
+    total_high = sum(int(np.bincount(farm_data(f)[1], minlength=NUM_CLASSES)[2])
+                     for f in range(NUM_FARMS))
+    print(f"{'FEDERATED (FedAvg)':<26}{fed_f1:>12.3f}{'':>16}{total_high:>16}")
+    print("=" * width)
 
-    # Be straight about where the benefit lands. Federation rescues farms whose
-    # own history is unrepresentative; a farm that already sees the full range of
-    # regional conditions has little left to gain, and may come out flat.
-    gains = [fed_acc - a for a in solo_accs]
-    best_i, worst_i = int(np.argmax(gains)), int(np.argmin(gains))
-    print(f"\nMost helped: {FARM_PROFILES[best_i]['name']} ({gains[best_i] * 100:+.1f}pp) "
-          f"- narrow local history.")
-    print(f"Least helped: {FARM_PROFILES[worst_i]['name']} ({gains[worst_i] * 100:+.1f}pp) "
-          f"- already sees representative conditions.")
+    gains = [fed_f1 - s for s in solo_f1]
+    best, worst = int(np.argmax(gains)), int(np.argmin(gains))
+    print(f"\nMost helped:  {farm_name(best)} ({gains[best]:+.3f} macro-F1) - "
+          f"thin local history.")
+    print(f"Least helped: {farm_name(worst)} ({gains[worst]:+.3f} macro-F1) - "
+          f"already holds the most data.")
+    print("Federation is not free for everyone: the best-resourced farm gives up "
+          "a little\naccuracy so the weakest gain a lot. That trade is the point, "
+          "and it is why the\nregional authority owns the model rather than the "
+          "largest farm.")
 
-    # --- The privacy audit ------------------------------------------------
-    payload = sum(p.nbytes for p in fed_params)
-    rows_held = sum(len(farm_data(f)[0]) for f in range(NUM_FARMS))
-    print(f"\nPer farm per round, {payload} bytes of weights crossed the wire "
-          f"({len(FEATURES)} weights + 1 bias).")
-    print(f"{rows_held} raw telemetry rows stayed on the farms. Zero were transmitted.")
+    print(f"\nHigh-need recall (the class that matters): federated "
+          f"{fed_rec[2]:.0%} of {counts[2]} held-out High rows.")
+    print(f"No single farm holds more than "
+          f"{max(int(np.bincount(farm_data(f)[1], minlength=NUM_CLASSES)[2]) for f in range(NUM_FARMS))} "
+          f"High examples; together they hold {total_high}.")
 
-    _save_solo_models(solos, solo_accs, x_region, y_region)
-    _save_conditions(solos, fed_params, x_region, y_region)
-    path = _save(fed_params, {
-        "region_accuracy": fed_acc,
-        "mean_solo_accuracy": mean_solo,
+    payload = sum(p.nbytes for p in fed)
+    rows = sum(len(farm_data(f)[0]) for f in range(NUM_FARMS))
+    print(f"\nPer farm per round, {payload} bytes of weights crossed the wire.")
+    print(f"{rows} rows of farm telemetry stayed on the farms. Zero were transmitted.")
+
+    _save_solo(solos, solo_f1)
+    path = _save(fed, {
+        "region_macro_f1": fed_f1,
+        "region_accuracy": accuracy(fed, x_region, y_region),
+        "region_high_recall": fed_rec[2],
         "rounds": rounds,
         "num_farms": NUM_FARMS,
     })

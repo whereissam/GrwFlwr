@@ -4,6 +4,7 @@ from .fl_model import (
     ModelUnavailable,
     compare_against_solo,
     predict_irrigation_safety,
+    recommendation,
     water_budget,
 )
 from .local_data import build_model_readings, get_local_farm_data, list_farms
@@ -18,5 +19,6 @@ __all__ = [
     "list_farms",
     "parse_weather_forecast",
     "predict_irrigation_safety",
+    "recommendation",
     "water_budget",
 ]
