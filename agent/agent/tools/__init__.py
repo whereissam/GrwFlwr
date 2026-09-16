@@ -1,4 +1,4 @@
-"""Data sources the irrigation agent uses: weather, local farm data, FL model."""
+"""Data sources the watering agent uses: weather, local farm data, FL model."""
 
 from .fl_model import build_fl_model_url, heuristic_irrigation_prediction, parse_fl_model_response
 from .local_data import get_local_farm_data

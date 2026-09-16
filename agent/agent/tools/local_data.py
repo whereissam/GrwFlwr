@@ -1,4 +1,4 @@
-"""Locally recorded farm data (soil sensors, crop, irrigation history)."""
+"""Locally recorded farm data (soil sensors, crop, watering history)."""
 
 import json
 from pathlib import Path

@@ -1,4 +1,4 @@
-"""Client for the team's federated-learning irrigation model.
+"""Client for the team's federated-learning watering model.
 
 TODO(fl-team): set FL_MODEL_URL to the real SuperGrid inference endpoint once
 the federated model is deployed. Until then this falls back to a simple

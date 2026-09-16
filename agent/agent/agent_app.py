@@ -1,6 +1,6 @@
-"""A Flower AgentApp that advises farmers on irrigation decisions.
+"""A Flower AgentApp that advises farmers on watering decisions.
 
-Combines a free weather forecast, the team's federated-learning irrigation
+Combines a free weather forecast, the team's federated-learning watering
 model, and locally recorded farm data, then lets the model reason over all
 three to answer the farmer's question.
 """
@@ -26,10 +26,10 @@ from .tools import (
 MODEL = "flower-endeavor-v1.0"
 
 SYSTEM_PROMPT = """\
-You are an irrigation advisor for a smallholder farm. You are given the \
-latest weather forecast, the federated-learning model's irrigation \
+You are a watering advisor for a smallholder farm. You are given the \
+latest weather forecast, the federated-learning model's watering \
 prediction, and locally recorded farm data as JSON. Use all three to give a \
-clear, actionable recommendation (irrigate now / wait / how much water) and \
+clear, actionable recommendation (water now / wait / how much water) and \
 briefly explain why, citing the data you used. Keep the answer concise and \
 farmer-friendly. If a data source's JSON contains an "error" field, note \
 that it was unavailable and reason from whatever data you do have.\
@@ -74,13 +74,13 @@ def _setup_daily_automation(agent: AgentSession, context: Context) -> None:
             "name": "start_automation",
             "call_id": "daily-irrigation-schedule",
             "arguments": {
-                "input": "Should I irrigate today?",
+                "input": "Should I water today?",
                 "start_at": start_at,
                 "fixed_interval": 86400,
             },
         }
     )
-    print(f"Daily irrigation check scheduled starting {start_at}: {result}")
+    print(f"Daily watering check scheduled starting {start_at}: {result}")
 
 
 def _maybe_schedule_from_question(
@@ -106,9 +106,9 @@ def _maybe_schedule_from_question(
                 "role": "system",
                 "content": (
                     "If, and only if, the farmer is explicitly asking to set "
-                    "up a recurring/automated irrigation check (e.g. 'do this "
+                    "up a recurring/automated watering check (e.g. 'do this "
                     "every day at 4pm'), call start_automation with "
-                    'input="Should I irrigate today?", fixed_interval=86400 '
+                    'input="Should I water today?", fixed_interval=86400 '
                     f"for daily recurrence, and start_at={default_start_at!r} "
                     "unless the farmer clearly asked for a different time (in "
                     "which case compute the next matching ISO 8601 timestamp "
@@ -155,7 +155,7 @@ def _web_fetch(agent: AgentSession, call_id: str, url: str) -> str:
 
 @app.main()
 def main(agent: AgentSession, context: Context) -> None:
-    """Answer a farmer's irrigation question using weather, FL, and local data."""
+    """Answer a farmer's watering question using weather, FL, and local data."""
     if context.run_config.get("agent.action") == "schedule":
         _setup_daily_automation(agent, context)
         return
@@ -222,9 +222,9 @@ def main(agent: AgentSession, context: Context) -> None:
     recommended_irrigation_mm = fl_prediction.get("recommended_irrigation_mm") or 0
     should_irrigate = recommended_irrigation_mm > 0
     if should_irrigate:
-        print(f"PUMP: ON — irrigating {recommended_irrigation_mm:.1f}mm")
+        print(f"PUMP: ON — watering {recommended_irrigation_mm:.1f}mm")
     else:
-        print("PUMP: OFF — no irrigation needed")
+        print("PUMP: OFF — no watering needed")
 
     context_json = json.dumps(
         {
@@ -232,9 +232,9 @@ def main(agent: AgentSession, context: Context) -> None:
             "local_farm_data": farm_data,
             "fl_model_prediction": fl_prediction,
             "pump_action": (
-                f"ON — irrigating {recommended_irrigation_mm:.1f}mm"
+                f"ON — watering {recommended_irrigation_mm:.1f}mm"
                 if should_irrigate
-                else "OFF — no irrigation needed"
+                else "OFF — no watering needed"
             ),
             "automation_just_scheduled": scheduled,
         },
