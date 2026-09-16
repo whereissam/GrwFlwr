@@ -71,6 +71,37 @@ COLUMN_ORDER = [
     "irrigation_need",
 ]
 
+# Published CSV: Flower client id plus irrigation-need columns only.
+EXPORT_COLUMNS = [
+    "partition",
+    "soil_moisture_pct_nfk",
+    "previous_irrigation_mm",
+    "onfarm_rain_gauge_mm",
+    "soil_type",
+    "irrigation_type",
+    "water_source",
+    "field_area_ha",
+    "irrigation_need",
+]
+
+
+def partition_id(farm_id: str) -> int:
+    return int(farm_id.rsplit("_", 1)[1])
+
+
+def export_row(row: dict) -> dict:
+    return {
+        "partition": partition_id(row["farm_id"]),
+        "soil_moisture_pct_nfk": row["soil_moisture_pct_nfk"],
+        "previous_irrigation_mm": row["previous_irrigation_mm"],
+        "onfarm_rain_gauge_mm": row["onfarm_rain_gauge_mm"],
+        "soil_type": row["soil_type"],
+        "irrigation_type": row["irrigation_type"],
+        "water_source": row["water_source"],
+        "field_area_ha": row["field_area_ha"],
+        "irrigation_need": row["irrigation_need"],
+    }
+
 LABEL_MAPPING = {0: "Low", 1: "Medium", 2: "High"}
 
 # Crop-and-stage thresholds (% nFK): (T_low, T_med). See DATA_SPEC.md.
@@ -444,28 +475,30 @@ def schema_document(years: list[int], n_farms: int) -> dict:
         "years": years,
         "n_farms_default": n_farms,
         "client_files": [COMBINED_FILENAME],
+        "client_id": {"column": "partition", "values": list(range(1, n_farms + 1))},
         "label_mapping": {str(k): v for k, v in LABEL_MAPPING.items()},
         "allowed_values": {
-            "crop_type": list(CROPS),
             "soil_type": list(SOILS),
             "irrigation_type": list(IRRIGATION_TYPES),
-            "growth_stage": list(STAGES),
-            "crop_variety_maturity": list(MATURITIES),
         },
-        "agent_only_columns": ["water_source", "field_area_ha"],
-        "feature_columns": [
-            "soil_moisture_pct_nfk",
+        "dropped_from_export": [
+            "date",
             "growth_stage",
             "crop_type",
             "days_since_last_irrigation",
+            "field_id",
+            "crop_variety_maturity",
+            "days_after_planting",
+        ],
+        "agent_only_columns": ["water_source", "field_area_ha"],
+        "feature_columns": [
+            "soil_moisture_pct_nfk",
             "previous_irrigation_mm",
             "onfarm_rain_gauge_mm",
             "soil_type",
-            "crop_variety_maturity",
-            "days_after_planting",
             "irrigation_type",
         ],
-        "columns": COLUMN_ORDER,
+        "columns": EXPORT_COLUMNS,
         "soil_moisture_pct_nfk": {
             "clip": [0, 100],
             "source": "noisy sensor",
@@ -599,7 +632,7 @@ def main() -> None:
     validate(all_rows, args.farms)
 
     write_csv(out / "regional_weather.csv", weather, ["date", "et0_mm", "rain_mm"])
-    write_csv(out / COMBINED_FILENAME, all_rows, COLUMN_ORDER)
+    write_csv(out / COMBINED_FILENAME, [export_row(row) for row in all_rows], EXPORT_COLUMNS)
     (out / "schema.json").write_text(
         json.dumps(schema_document(years, args.farms), indent=2) + "\n"
     )

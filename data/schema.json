@@ -20,17 +20,19 @@
   "client_files": [
     "partitions.csv"
   ],
+  "client_id": {
+    "column": "partition",
+    "values": [
+      1,
+      2
+    ]
+  },
   "label_mapping": {
     "0": "Low",
     "1": "Medium",
     "2": "High"
   },
   "allowed_values": {
-    "crop_type": [
-      "potato",
-      "maize",
-      "sugar_beet"
-    ],
     "soil_type": [
       "sand",
       "loamy_sand",
@@ -40,48 +42,34 @@
       "hose_reel",
       "pivot",
       "drip"
-    ],
-    "growth_stage": [
-      "initial",
-      "development",
-      "sensitive",
-      "late"
-    ],
-    "crop_variety_maturity": [
-      "early",
-      "medium",
-      "late"
     ]
   },
+  "dropped_from_export": [
+    "date",
+    "growth_stage",
+    "crop_type",
+    "days_since_last_irrigation",
+    "field_id",
+    "crop_variety_maturity",
+    "days_after_planting"
+  ],
   "agent_only_columns": [
     "water_source",
     "field_area_ha"
   ],
   "feature_columns": [
     "soil_moisture_pct_nfk",
-    "growth_stage",
-    "crop_type",
-    "days_since_last_irrigation",
     "previous_irrigation_mm",
     "onfarm_rain_gauge_mm",
     "soil_type",
-    "crop_variety_maturity",
-    "days_after_planting",
     "irrigation_type"
   ],
   "columns": [
-    "farm_id",
-    "field_id",
-    "date",
+    "partition",
     "soil_moisture_pct_nfk",
-    "growth_stage",
-    "crop_type",
-    "days_since_last_irrigation",
     "previous_irrigation_mm",
     "onfarm_rain_gauge_mm",
     "soil_type",
-    "crop_variety_maturity",
-    "days_after_planting",
     "irrigation_type",
     "water_source",
     "field_area_ha",

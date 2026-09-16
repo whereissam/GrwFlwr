@@ -24,16 +24,20 @@ Writes to `--out`:
 
 | Path | What it is |
 | --- | --- |
-| `partitions.csv` | Both farmers in one file. Split on `farm_id`: `farmer_1` is partition 1, `farmer_2` is partition 2. |
+| `partitions.csv` | Both clients in one file. Split on `partition`: `1` and `2`. |
 | `regional_weather.csv` | Shared regional `et0_mm` and `rain_mm` |
 | `schema.json` | Column list, `label_mapping`, partition profiles |
 
 ## Column roles
 
-**Identifiers:** `farm_id`, `field_id`, `date`
+Published columns in `partitions.csv` (simulation still uses the full spec internally):
 
-**Features:** `soil_moisture_pct_nfk`, `growth_stage`, `crop_type`, `days_since_last_irrigation`, `previous_irrigation_mm`, `onfarm_rain_gauge_mm`, `soil_type`, `crop_variety_maturity`, `days_after_planting`, `irrigation_type`
+**Identifier:** `partition` — `1` or `2`
+
+**Features:** `soil_moisture_pct_nfk`, `previous_irrigation_mm`, `onfarm_rain_gauge_mm`, `soil_type`, `irrigation_type`
 
 **Agent only:** `water_source`, `field_area_ha`
 
-**Label:** `irrigation_need` — `0` Low, `1` Medium, `2` High (see `label_mapping` in `schema.json`)
+**Label:** `irrigation_need` — `0` Low, `1` Medium, `2` High
+
+Dropped from the export: `date`, `growth_stage`, `crop_type`, `days_since_last_irrigation`, plus `field_id`, `crop_variety_maturity`, `days_after_planting`.
