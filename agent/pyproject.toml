@@ -20,7 +20,7 @@ flwr-version-target = "1.35.0"
 fab-include = ["agent/**/*.py", "LICENSE"]
 
 [tool.flwr.app.config.agent]
-input = "Explain why flowers turn toward light."
+input = "Explain."
 
 [tool.flwr.app.components]
 agentapp = "agent.agent_app:app"
