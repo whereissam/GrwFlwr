@@ -17,7 +17,7 @@
    STENCIL & TABLET
    Bone field, black, saturated retro-print accents.
    Flat by design: no shadows, no gradients.
-   Fixed 1920x1080 stage, scaled by <deck-stage>.
+   Fixed 1920x1080 stage, scaled by the deck-stage component.
    =========================================== */
 :root{
   color-scheme: light;
@@ -116,168 +116,106 @@ table.matrix tr.win td{background:var(--mustard)}
 <body>
 <deck-stage width="1920" height="1080">
 
-<!-- 01 COVER -->
-<section data-label="Cover" class="dark">
-  <div class="topbar"><span>Flower AI Hackathon 2026</span><span class="meta">Federated Learning · Agents</span></div>
-  <div style="position:absolute;left:64px;right:64px;top:180px">
-    <div class="super" style="color:var(--orange);margin-bottom:22px">Privacy-preserving water allocation</div>
-    <h1 class="sten hero" style="color:var(--bone)">Grow<br>Flwr</h1>
+<!-- 01 — THE CRISIS + THE DEADLOCK -->
+<section data-label="Why" class="dark">
+  <div class="topbar"><span style="color:var(--bone)">GrowFlwr</span><span class="meta" style="color:var(--bone)">Flower AI Hackathon 2026</span></div>
+  <div style="position:absolute;left:64px;top:150px;width:1000px">
+    <div class="super" style="color:var(--orange)">Why this exists</div>
+    <h1 class="sten" style="color:var(--bone);font-size:120px;line-height:.88;margin-top:14px">
+      Drought is<br>a survival<br>problem.</h1>
+    <p class="body-lg" style="color:var(--bone);opacity:.85;margin-top:28px;max-width:860px">
+      Europe's farmers face rising water costs and hard pumping limits. Efficient
+      irrigation stopped being an optimisation and became a condition of staying
+      in business.</p>
   </div>
-  <div style="position:absolute;left:64px;bottom:110px;display:flex;gap:26px;align-items:flex-end">
-    <div class="fill-orange" style="border-radius:14px;padding:18px 26px">
-      <div class="sten" style="font-size:36px;line-height:1">2 SEASONS · 0 ROWS SHARED</div>
+  <div style="position:absolute;right:64px;top:210px;width:700px">
+    <div class="card fill-magenta" style="padding:30px">
+      <div class="label">AND YET</div>
+      <div class="sten card-h3" style="font-size:40px;margin-top:10px;line-height:1.05">
+        Nobody will<br>upload the data.</div>
+      <p class="body" style="margin-top:16px">Pumping logs, soil quality and yield are commercial secrets. Worse, raw extraction records expose a farm to fines and water-rights disputes.</p>
     </div>
-    <p class="body-lg" style="max-width:640px;color:var(--bone);opacity:.85">
-      Irrigation advice from a model trained across every farm in a water region —
-      without a single row of farm telemetry leaving the farm.</p>
-  </div>
-  <div class="footer"><span>GrowFlwr</span><span>Built on Flower</span></div>
-</section>
-
-<!-- 02 PROBLEM -->
-<section data-label="Problem">
-  <div class="topbar"><span>The problem</span><span class="meta">01 / 09</span></div>
-  <div class="stage">
-    <h2 class="sten page-h">Everyone needs<br>the same model.<br>Nobody will share.</h2>
-    <div class="row">
-      <div class="card fill-magenta" style="flex:1">
-        <div class="sten card-h3">The regulator</div>
-        <p class="body" style="margin-top:14px">Needs a regional view of who can safely draw water, and when.</p>
-      </div>
-      <div class="card fill-teal" style="flex:1">
-        <div class="sten card-h3">The farmer</div>
-        <p class="body" style="margin-top:14px">Will not publish soil, yield or usage data. It is commercially sensitive, and it sets their allocation.</p>
-      </div>
-      <div class="card fill-sienna" style="flex:1">
-        <div class="sten card-h3">Alone</div>
-        <p class="body" style="margin-top:14px">One farm has seen 7–15 genuinely dry events in a season. That is not enough to learn from.</p>
-      </div>
+    <div class="card fill-ink" style="padding:26px;margin-top:22px;border:2px solid rgba(226,220,201,.22)">
+      <div class="sten" style="color:var(--orange);font-size:74px;line-height:1">ZERO</div>
+      <p class="body" style="color:var(--bone);margin-top:6px">farmers join a centralised platform. That is the deadlock every smart-agriculture AI has hit.</p>
     </div>
   </div>
-  <div class="footer"><span>GrowFlwr</span><span>Problem</span></div>
+  <div class="footer"><span style="color:var(--bone)">GrowFlwr</span><span style="color:var(--bone)">01 — The problem</span></div>
 </section>
 
-<!-- 03 HOW -->
-<section data-label="How it works">
-  <div class="topbar"><span>How it works</span><span class="meta">02 / 09</span></div>
+<!-- 02 — WHY FLOWER IS THE ENABLER -->
+<section data-label="Enabler">
+  <div class="topbar"><span>Why Flower, not a cloud database</span><span class="meta">02 / 05</span></div>
   <div class="stage">
     <div class="action-bar">
-      <span class="label">Flower</span><span class="rule"></span>
-      <span class="h">Weights travel. Data stays.</span>
+      <span class="label">The unlock</span><span class="rule"></span>
+      <span class="h">Weights travel. Raw telemetry never does.</span>
     </div>
     <div class="row">
       <div class="tablet fill-blue" style="flex:1">
-        <div class="sten num-tab">01</div>
-        <div class="bottom"><div class="sten card-h3">Train locally</div>
-        <p class="body" style="margin-top:10px">Each farm fits the model on its own rows. A Flower ClientApp, one per farm.</p></div>
+        <div class="sten num-tab" style="font-size:150px">744<span style="font-family:'Barlow Condensed';font-size:38px;font-weight:800;vertical-align:top">B</span></div>
+        <div class="bottom"><div class="sten card-h3">Leaves the farm</div>
+        <p class="body" style="margin-top:10px">A 30×3 weight matrix and three biases, per farm per round. Small enough to print on this slide.</p></div>
       </div>
-      <div class="tablet fill-orange" style="flex:1">
-        <div class="sten num-tab">02</div>
-        <div class="bottom"><div class="sten card-h3">Average weights</div>
-        <p class="body" style="margin-top:10px">FedAvg at the regional authority. 744 bytes per farm per round — and nothing else.</p></div>
-      </div>
-      <div class="tablet fill-olive" style="flex:1">
-        <div class="sten num-tab">03</div>
-        <div class="bottom"><div class="sten card-h3">Ask the agent</div>
-        <p class="body" style="margin-top:10px">A Flower AgentApp scores the farmer's field against the global model and explains it.</p></div>
-      </div>
-    </div>
-  </div>
-  <div class="footer"><span>GrowFlwr</span><span>Architecture</span></div>
-</section>
-
-<!-- 04 RESULT TABLE -->
-<section data-label="Results">
-  <div class="topbar"><span>Results</span><span class="meta">03 / 09 · trained 2025, tested 2026</span></div>
-  <div class="stage">
-    <h2 class="sten page-h" style="font-size:80px">Federation lifts<br>the farms that<br>cannot learn alone.</h2>
-    <div class="row" style="flex:0 0 auto">
-      <div class="card fill-paper" style="flex:1.4;padding:26px">
-        <table class="matrix">
-          <tr><th>Model</th><th>macro-F1</th><th>vs fed.</th><th>High days seen</th></tr>
-          <tr><td>farmer_1 alone</td><td>0.596</td><td>−0.140</td><td>16</td></tr>
-          <tr><td>farmer_2 alone</td><td>0.666</td><td>−0.071</td><td>9</td></tr>
-          <tr class="win"><td>Federated</td><td>0.736</td><td>—</td><td>25</td></tr>
-        </table>
-      </div>
-      <div class="card fill-ink" style="flex:.8">
-        <div class="eyebrow" style="color:var(--orange)">Why not accuracy</div>
-        <div class="sten num-stat" style="color:var(--bone);margin-top:6px">66<span style="font-family:'Barlow Condensed';font-size:40px;font-weight:800;vertical-align:top">%</span></div>
-        <p class="body" style="margin-top:8px">is what you score by always predicting "Low". Two-thirds of rows are Low, so accuracy flatters a useless model. macro-F1 throughout.</p>
-      </div>
-    </div>
-  </div>
-  <div class="footer"><span>GrowFlwr</span><span>Results</span></div>
-</section>
-
-<!-- 05 CROSS-CROP -->
-<section data-label="Cross-crop" class="dark">
-  <div class="topbar"><span style="color:var(--bone)">The whole argument</span><span class="meta" style="color:var(--bone)">04 / 09 · 2026 season, 467 maize rows</span></div>
-  <div style="position:absolute;left:64px;top:170px">
-    <div class="eyebrow" style="color:var(--mustard)">Scored on maize it has never seen</div>
-    <div class="sten" style="color:var(--orange);font-size:360px;line-height:.82;margin-top:6px">0.48</div>
-    <div class="label" style="color:var(--bone);opacity:.8;margin-top:-4px">FARMER_1 ALONE — MACRO-F1</div>
-  </div>
-  <div style="position:absolute;right:64px;top:210px;width:700px;text-align:right">
-    <h2 class="sten" style="color:var(--bone);font-size:84px;line-height:.92">A model alone<br>has no signal<br>off its own crop.</h2>
-    <p class="body-lg" style="color:var(--bone);opacity:.85;margin-top:22px">
-      farmer_1 has only ever grown potato. Asked about farmer_2's maize, it scores
-      barely better than guessing — and it does not know that it is guessing.</p>
-  </div>
-  <div style="position:absolute;left:64px;right:64px;bottom:96px;display:flex;gap:24px;align-items:stretch">
-    <div class="card fill-ink" style="flex:1;padding:22px;border:2px solid rgba(226,220,201,.25)">
-      <div class="label" style="color:var(--bone);opacity:.7">FARMER_1 ALONE</div>
-      <div class="sten" style="color:var(--bone);font-size:64px;line-height:1;margin-top:4px">0.480</div>
-    </div>
-    <div class="card fill-teal" style="flex:1;padding:22px">
-      <div class="label">FEDERATED</div>
-      <div class="sten" style="font-size:64px;line-height:1;margin-top:4px">0.664</div>
-    </div>
-    <div class="card fill-mustard" style="flex:1.6;padding:22px">
-      <div class="label">AND HONESTLY</div>
-      <p class="body-sm" style="margin-top:8px">farmer_2's own model still edges the federated one on its own maize (0.678 vs 0.664). Federation's win is on ground you have not farmed.</p>
-    </div>
-  </div>
-  <div class="footer"><span style="color:var(--bone)">GrowFlwr</span><span style="color:var(--bone)">Cross-crop</span></div>
-</section>
-
-<!-- 06 PRIVACY -->
-<section data-label="Privacy">
-  <div class="topbar"><span>What crosses the wire</span><span class="meta">05 / 09 · measured, per round</span></div>
-  <div class="stage">
-    <div class="row">
       <div class="tablet fill-teal" style="flex:1">
-        <div class="sten num-tab" style="font-size:170px">744<span style="font-family:'Barlow Condensed';font-size:40px;font-weight:800;vertical-align:top">B</span></div>
-        <div class="bottom"><div class="sten card-h3">Left the farm</div>
-        <p class="body" style="margin-top:10px">A 30×3 weight matrix and three biases. Small enough to print on this slide.</p></div>
+        <div class="sten num-tab" style="font-size:150px">973</div>
+        <div class="bottom"><div class="sten card-h3">Rows stay put</div>
+        <p class="body" style="margin-top:10px">Every soil reading and irrigation record from the training season. None transmitted, so there is nothing to subpoena.</p></div>
       </div>
-      <div class="tablet fill-magenta" style="flex:1">
-        <div class="sten num-tab" style="font-size:170px">973</div>
-        <div class="bottom"><div class="sten card-h3">Rows stayed put</div>
-        <p class="body" style="margin-top:10px">Every soil reading and irrigation record from the 2025 training season. None transmitted.</p></div>
-      </div>
-      <div class="card fill-paper" style="flex:1.1">
-        <div class="eyebrow">Also true</div>
-        <div class="sten card-h3" style="margin-top:12px;font-size:34px">Federated ≈<br>centralized.</div>
-        <p class="body" style="margin-top:14px">Pooling every row into one model scores macro-F1 <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.722</strong>; federated scores <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.736</strong>. On High-need recall centralized is ahead, 70% to 68%.</p>
-        <p class="body-sm" style="margin-top:14px;opacity:.85">Neither is clearly better. That is the point: keeping the data home costs essentially nothing.</p>
+      <div class="card fill-paper" style="flex:1.15">
+        <div class="eyebrow">Not over-engineering</div>
+        <div class="sten card-h3" style="margin-top:12px;font-size:36px">Federation is the<br>only way in.</div>
+        <p class="body" style="margin-top:14px">If privacy were not the barrier, a central database would be simpler and we would have built one. Privacy <em>is</em> the barrier. Flower unlocks data that otherwise does not exist.</p>
+        <p class="body-sm" style="margin-top:auto;opacity:.8">Measured: pooling everything centrally scores macro-F1 0.722; federated scores 0.736. Keeping data home costs nothing.</p>
       </div>
     </div>
   </div>
-  <div class="footer"><span>GrowFlwr</span><span>Privacy audit</span></div>
+  <div class="footer"><span>GrowFlwr</span><span>02 — The enabler</span></div>
 </section>
 
-<!-- 07 DEMO -->
+<!-- 03 — PROOF -->
+<section data-label="Proof" class="dark">
+  <div class="topbar"><span style="color:var(--bone)">The proof</span><span class="meta" style="color:var(--bone)">03 / 05 · trained 2025, tested 2026</span></div>
+  <div style="position:absolute;left:64px;top:160px">
+    <div class="eyebrow" style="color:var(--mustard)">Scored on a crop it has never grown</div>
+    <div class="sten" style="color:var(--orange);font-size:300px;line-height:.82;margin-top:4px">+38<span style="font-family:'Barlow Condensed';font-size:70px;font-weight:800;vertical-align:top">%</span></div>
+    <div class="label" style="color:var(--bone);opacity:.8">MACRO-F1, 0.480 &rarr; 0.664</div>
+  </div>
+  <div style="position:absolute;right:64px;top:200px;width:720px;text-align:right">
+    <h2 class="sten" style="color:var(--bone);font-size:76px;line-height:.94">Alone, a model<br>has no signal off<br>its own ground.</h2>
+    <p class="body-lg" style="color:var(--bone);opacity:.85;margin-top:20px">
+      Our two farms specialise — one grows only potato, the other only maize.
+      Asked about the other's fields, a solo model is barely better than guessing,
+      and it does not know it is guessing.</p>
+  </div>
+  <div style="position:absolute;left:64px;right:64px;bottom:92px;display:flex;gap:22px">
+    <div class="card fill-paper" style="flex:1.5;padding:22px">
+      <table class="matrix">
+        <tr><th>Model</th><th>macro-F1</th><th>gain</th></tr>
+        <tr><td>farmer_1 alone</td><td>0.596</td><td>+23%</td></tr>
+        <tr><td>farmer_2 alone</td><td>0.666</td><td>+11%</td></tr>
+        <tr class="win"><td>Federated</td><td>0.736</td><td>—</td></tr>
+      </table>
+    </div>
+    <div class="card fill-mustard" style="flex:1;padding:22px">
+      <div class="label">WHAT ACTUALLY CARRIES IT</div>
+      <p class="body-sm" style="margin-top:10px">Weighting the rare class. Turn it off and overall score barely moves — but detection of urgent irrigation days collapses from <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">68% to 23%</strong>.</p>
+    </div>
+  </div>
+  <div class="footer"><span style="color:var(--bone)">GrowFlwr</span><span style="color:var(--bone)">03 — Proof</span></div>
+</section>
+
+<!-- 04 — THE PRODUCT -->
 <section data-label="Demo">
-  <div class="topbar"><span>Live</span><span class="meta">06 / 09 · SuperGrid + open-meteo</span></div>
+  <div class="topbar"><span>What the farmer actually gets</span><span class="meta">04 / 05 · live on SuperGrid</span></div>
   <div class="stage">
     <div class="action-bar">
-      <span class="label">Demo</span><span class="rule"></span>
+      <span class="label">Flower Agent</span><span class="rule"></span>
       <span class="h">"Should I irrigate today?"</span>
     </div>
     <div class="row">
-      <div class="card fill-ink" style="flex:1.2">
-        <div class="termline" style="color:var(--bone)">--- farmer_2 / farmer_2_field_3 (maize, late) ---
+      <div class="card fill-ink" style="flex:1.15">
+        <div class="termline" style="color:var(--bone);font-size:21px">--- farmer_2 / farmer_2_field_3 (maize, late) ---
 soil moisture 31.3% nFK, 16d since irrigation, 35.7 ha
 weather: <span style="color:var(--mustard)">live forecast (open-meteo)</span>
 
@@ -285,55 +223,41 @@ this farm alone:    Medium  ( 98%, macro-F1 0.666)
 federated:          Medium  ( 88%, macro-F1 0.736)
 <span style="color:var(--orange)">&gt;&gt;&gt; PLAN            irrigate — 18.0 mm = 6,426 m3</span></div>
       </div>
-      <div class="card fill-orange" style="flex:.9">
-        <div class="eyebrow">What the farmer hears</div>
-        <p class="body-lg" style="margin-top:16px">"Medium need: irrigate today with 6,426 cubic metres through the pivot, applying 18.0 mm across 35.7 ha. Soil moisture is 31.3% nFK and it has been 16 days since the last irrigation."</p>
-        <p class="body-sm" style="margin-top:auto;opacity:.85">Every figure is computed before the model is called. The agent explains numbers; it does not invent them.</p>
+      <div class="card fill-orange" style="flex:.95">
+        <div class="eyebrow">In plain words</div>
+        <p class="body-lg" style="margin-top:14px">"Medium need: irrigate today with 6,426 cubic metres through the pivot. Soil moisture is 31.3% nFK and it has been 16 days since the last irrigation."</p>
+        <p class="body-sm" style="margin-top:auto;opacity:.85">Every figure is computed before the language model is called. It explains numbers; it never invents them.</p>
       </div>
     </div>
   </div>
-  <div class="footer"><span>GrowFlwr</span><span>Demo</span></div>
+  <div class="footer"><span>GrowFlwr</span><span>04 — The product</span></div>
 </section>
 
-<!-- 08 HONEST -->
-<section data-label="Caveats">
-  <div class="topbar"><span>What we are not claiming</span><span class="meta">07 / 09</span></div>
-  <div class="stage">
-    <h2 class="sten page-h" style="font-size:76px">Three things a judge<br>should hear from us first.</h2>
-    <div class="row">
-      <div class="card fill-mustard" style="flex:1">
-        <div class="sten card-h3">The data is generated</div>
-        <p class="body" style="margin-top:12px">Synthetic, from a written spec. Our numbers say how well the model recovers a generator's rules — not how it would advise a real farmer. Real error would be larger.</p>
-      </div>
-      <div class="card fill-sienna" style="flex:1">
-        <div class="sten card-h3">Two farms is very few</div>
-        <p class="body" style="margin-top:12px">FedAvg over two clients is a noisy average. An earlier four-farm version had one farm <em>losing</em> by joining — whether everyone gains depends on how specialised the farms are.</p>
-      </div>
-      <div class="card fill-blue" style="flex:1">
-        <div class="sten card-h3">High recall is 68%</div>
-        <p class="body" style="margin-top:12px">Of 44 High days in the 2026 season, the model catches 30. Pooling the data centrally catches more — 77%. We are not ahead on the class that matters most.</p>
-      </div>
-    </div>
-  </div>
-  <div class="footer"><span>GrowFlwr</span><span>Honest limits</span></div>
-</section>
-
-<!-- 09 CLOSE -->
+<!-- 05 — LIMITS + CLOSE -->
 <section data-label="Close" class="dark">
-  <div class="topbar"><span style="color:var(--bone)">Where this goes</span><span class="meta" style="color:var(--bone)">08 / 09</span></div>
-  <div style="position:absolute;left:64px;right:64px;top:210px">
-    <h2 class="sten" style="color:var(--bone);font-size:150px;line-height:.86">Water is<br>allocated<br>regionally.</h2>
-    <p class="body-lg" style="color:var(--orange);margin-top:30px;max-width:900px;
-       font-family:'Barlow Condensed';text-transform:uppercase;font-size:34px;font-weight:800;letter-spacing:.06em">
-      So the model should be too.</p>
+  <div class="topbar"><span style="color:var(--bone)">Where this goes</span><span class="meta" style="color:var(--bone)">05 / 05</span></div>
+  <div style="position:absolute;left:64px;top:150px;width:920px">
+    <h2 class="sten" style="color:var(--bone);font-size:104px;line-height:.9">Water is allocated<br>regionally.<br>So should the model be.</h2>
   </div>
-  <div style="position:absolute;left:64px;right:64px;bottom:100px;display:flex;gap:24px">
-    <div class="card fill-teal" style="flex:1;padding:24px"><div class="sten card-h3">Next: more farms</div>
-      <p class="body-sm" style="margin-top:8px">2 → 12. Measured: farm count is the one lever that moved the number.</p></div>
-    <div class="card fill-olive" style="flex:1;padding:24px"><div class="sten card-h3">Next: real telemetry</div>
-      <p class="body-sm" style="margin-top:8px">Dropout and stuck sensors are already in the data. Next: real gauges.</p></div>
-    <div class="card fill-orange" style="flex:1;padding:24px"><div class="sten card-h3">Next: policy execution</div>
-      <p class="body-sm" style="margin-top:8px">From advice to enforced regional allocation.</p></div>
+  <div style="position:absolute;left:64px;right:64px;top:430px;display:flex;gap:22px">
+    <div class="card fill-mustard" style="flex:1;padding:24px">
+      <div class="sten card-h3">The data is generated</div>
+      <p class="body-sm" style="margin-top:10px">Synthetic, from a written spec. Our numbers show a model recovering a generator's rules — real-world error would be larger.</p>
+    </div>
+    <div class="card fill-sienna" style="flex:1;padding:24px">
+      <div class="sten card-h3">Two farms is very few</div>
+      <p class="body-sm" style="margin-top:10px">FedAvg over two clients is a noisy average. An earlier four-farm split had one farm <em>losing</em> by joining.</p>
+    </div>
+    <div class="card fill-blue" style="flex:1;padding:24px">
+      <div class="sten card-h3">68% is not enough</div>
+      <p class="body-sm" style="margin-top:10px">We catch 30 of 44 urgent days. Central pooling catches slightly more. We are not ahead on the class that matters most.</p>
+    </div>
+  </div>
+  <div style="position:absolute;left:64px;right:64px;bottom:92px">
+    <div class="action-bar" style="background:var(--orange)">
+      <span class="label">Next</span><span class="rule"></span>
+      <span class="h">More farms · real telemetry · regional policy execution</span>
+    </div>
   </div>
   <div class="footer"><span style="color:var(--bone)">GrowFlwr</span><span style="color:var(--bone)">Built on Flower</span></div>
 </section>
