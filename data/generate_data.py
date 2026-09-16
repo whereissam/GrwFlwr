@@ -79,7 +79,6 @@ EXPORT_COLUMNS = [
     "onfarm_rain_gauge_mm",
     "soil_type",
     "irrigation_type",
-    "water_source",
     "field_area_ha",
     "irrigation_need",
 ]
@@ -97,7 +96,6 @@ def export_row(row: dict) -> dict:
         "onfarm_rain_gauge_mm": row["onfarm_rain_gauge_mm"],
         "soil_type": row["soil_type"],
         "irrigation_type": row["irrigation_type"],
-        "water_source": row["water_source"],
         "field_area_ha": row["field_area_ha"],
         "irrigation_need": row["irrigation_need"],
     }
@@ -489,8 +487,9 @@ def schema_document(years: list[int], n_farms: int) -> dict:
             "field_id",
             "crop_variety_maturity",
             "days_after_planting",
+            "water_source",
         ],
-        "agent_only_columns": ["water_source", "field_area_ha"],
+        "agent_only_columns": ["field_area_ha"],
         "feature_columns": [
             "soil_moisture_pct_nfk",
             "previous_irrigation_mm",

@@ -36,8 +36,8 @@ Published columns in `partitions.csv` (simulation still uses the full spec inter
 
 **Features:** `soil_moisture_pct_nfk`, `previous_irrigation_mm`, `onfarm_rain_gauge_mm`, `soil_type`, `irrigation_type`
 
-**Agent only:** `water_source`, `field_area_ha`
+**Agent only:** `field_area_ha`
 
 **Label:** `irrigation_need` — `0` Low, `1` Medium, `2` High
 
-Dropped from the export: `date`, `growth_stage`, `crop_type`, `days_since_last_irrigation`, plus `field_id`, `crop_variety_maturity`, `days_after_planting`.
+Dropped from the export: `date`, `growth_stage`, `crop_type`, `days_since_last_irrigation`, `water_source`, plus `field_id`, `crop_variety_maturity`, `days_after_planting`.
