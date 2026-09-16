@@ -24,7 +24,7 @@ serverapp = "growflwr.server_app:app"
 clientapp = "growflwr.client_app:app"
 
 [tool.flwr.app.config]
-num-server-rounds = 10
+num-server-rounds = 30
 local-epochs = 40
 learning-rate = 0.3
 

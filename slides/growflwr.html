@@ -195,9 +195,9 @@ table.matrix tr.win td{background:var(--mustard)}
       <div class="card fill-paper" style="flex:1.4;padding:26px">
         <table class="matrix">
           <tr><th>Model</th><th>macro-F1</th><th>vs fed.</th><th>High days seen</th></tr>
-          <tr><td>farmer_1 alone</td><td>0.576</td><td>−0.133</td><td>16</td></tr>
-          <tr><td>farmer_2 alone</td><td>0.640</td><td>−0.069</td><td>9</td></tr>
-          <tr class="win"><td>Federated</td><td>0.709</td><td>—</td><td>25</td></tr>
+          <tr><td>farmer_1 alone</td><td>0.596</td><td>−0.140</td><td>16</td></tr>
+          <tr><td>farmer_2 alone</td><td>0.666</td><td>−0.071</td><td>9</td></tr>
+          <tr class="win"><td>Federated</td><td>0.736</td><td>—</td><td>25</td></tr>
         </table>
       </div>
       <div class="card fill-ink" style="flex:.8">
@@ -215,7 +215,7 @@ table.matrix tr.win td{background:var(--mustard)}
   <div class="topbar"><span style="color:var(--bone)">The whole argument</span><span class="meta" style="color:var(--bone)">04 / 09 · 2026 season, 467 maize rows</span></div>
   <div style="position:absolute;left:64px;top:170px">
     <div class="eyebrow" style="color:var(--mustard)">Scored on maize it has never seen</div>
-    <div class="sten" style="color:var(--orange);font-size:360px;line-height:.82;margin-top:6px">0.46</div>
+    <div class="sten" style="color:var(--orange);font-size:360px;line-height:.82;margin-top:6px">0.48</div>
     <div class="label" style="color:var(--bone);opacity:.8;margin-top:-4px">FARMER_1 ALONE — MACRO-F1</div>
   </div>
   <div style="position:absolute;right:64px;top:210px;width:700px;text-align:right">
@@ -227,15 +227,15 @@ table.matrix tr.win td{background:var(--mustard)}
   <div style="position:absolute;left:64px;right:64px;bottom:96px;display:flex;gap:24px;align-items:stretch">
     <div class="card fill-ink" style="flex:1;padding:22px;border:2px solid rgba(226,220,201,.25)">
       <div class="label" style="color:var(--bone);opacity:.7">FARMER_1 ALONE</div>
-      <div class="sten" style="color:var(--bone);font-size:64px;line-height:1;margin-top:4px">0.461</div>
+      <div class="sten" style="color:var(--bone);font-size:64px;line-height:1;margin-top:4px">0.480</div>
     </div>
     <div class="card fill-teal" style="flex:1;padding:22px">
       <div class="label">FEDERATED</div>
-      <div class="sten" style="font-size:64px;line-height:1;margin-top:4px">0.632</div>
+      <div class="sten" style="font-size:64px;line-height:1;margin-top:4px">0.664</div>
     </div>
     <div class="card fill-mustard" style="flex:1.6;padding:22px">
       <div class="label">AND HONESTLY</div>
-      <p class="body-sm" style="margin-top:8px">farmer_2's own model still edges the federated one on its own maize (0.655). Federation's win is on ground you have not farmed.</p>
+      <p class="body-sm" style="margin-top:8px">farmer_2's own model still edges the federated one on its own maize (0.678 vs 0.664). Federation's win is on ground you have not farmed.</p>
     </div>
   </div>
   <div class="footer"><span style="color:var(--bone)">GrowFlwr</span><span style="color:var(--bone)">Cross-crop</span></div>
@@ -259,7 +259,7 @@ table.matrix tr.win td{background:var(--mustard)}
       <div class="card fill-paper" style="flex:1.1">
         <div class="eyebrow">Also true</div>
         <div class="sten card-h3" style="margin-top:12px;font-size:34px">Federated ≈<br>centralized.</div>
-        <p class="body" style="margin-top:14px">Pooling every row into one model scores macro-F1 <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.687</strong>; federated scores <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.709</strong>. On High-need recall centralized is ahead, 77% to 68%.</p>
+        <p class="body" style="margin-top:14px">Pooling every row into one model scores macro-F1 <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.722</strong>; federated scores <strong style="font-weight:400;font-family:'Barlow Condensed';letter-spacing:.06em">0.736</strong>. On High-need recall centralized is ahead, 70% to 68%.</p>
         <p class="body-sm" style="margin-top:14px;opacity:.85">Neither is clearly better. That is the point: keeping the data home costs essentially nothing.</p>
       </div>
     </div>
@@ -281,8 +281,8 @@ table.matrix tr.win td{background:var(--mustard)}
 soil moisture 31.3% nFK, 16d since irrigation, 35.7 ha
 weather: <span style="color:var(--mustard)">live forecast (open-meteo)</span>
 
-this farm alone:    Medium  ( 98%, macro-F1 0.640)
-federated:          Medium  ( 88%, macro-F1 0.709)
+this farm alone:    Medium  ( 98%, macro-F1 0.666)
+federated:          Medium  ( 88%, macro-F1 0.736)
 <span style="color:var(--orange)">&gt;&gt;&gt; PLAN            irrigate — 18.0 mm = 6,426 m3</span></div>
       </div>
       <div class="card fill-orange" style="flex:.9">
